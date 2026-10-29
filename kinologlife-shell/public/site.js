@@ -156,13 +156,10 @@
     if (data.has_access) {
       html += "<p>Доступ открыт" + (data.access_until_label ? " до <strong>" + esc(data.access_until_label) + "</strong>" : "") + ".</p>";
       if (data.recurring_active) html += "<p class=\"fine\">Автопродление включено.</p>";
-      if (data.sso_url) html += '<p><a class="btn" href="' + esc(data.sso_url) + '">Перейти к урокам</a></p>';
+      html += '<p class="fine">Уроки открываются из общего аккаунта. Отдельный пароль школы в кабинет не передаётся.</p>';
     } else {
       html += "<p>Сейчас доступа к урокам нет.</p>";
       html += '<p><a class="btn" href="/tarif">Открыть доступ</a></p>';
-    }
-    if (data.force_password) {
-      html += '<p class="note">После оплаты задайте свой пароль — или войдите с паролем из письма. <a href="/join/?rb_paid=1&welcome=1">Задать пароль</a></p>';
     }
     if (data.email_verified === false) {
       html += '<p class="fine">Подтвердите почту по ссылке из письма. Доступ к урокам это не блокирует.</p>';

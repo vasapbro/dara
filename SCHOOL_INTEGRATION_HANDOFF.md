@@ -5,325 +5,306 @@ cursor:
 
 # Передача: онлайн-школа для агента «Приложение + CRM»
 
-Снято с живых серверов и репозитория 29 октября 2026. Секретов, паролей и строк подключения здесь нет. Контракт входа и интеграционных API меняется только через этот документ: тихо править общий логин или эти эндпоинты нельзя.
+Обновлено 29 октября 2026 под контракт онлайн-школы. Секретов, паролей и строк подключения здесь нет. Ветки `cursor/online-school-ios-f98a` и `cursor/online-school-crm-f98a` этим изменением не трогались.
 
-Отдельной двери школы в приложении и задачи OSH-4 нет. В репозитории нет веток и коммитов iOS или OSH-4, откатывать нечего.
+Школа публикует здесь каталог, прогресс, playback и чтение доступа из CRM. iOS ходит в школу только по этим маршрутам. Пока живой хост не обновлён, адаптер по-прежнему не должен притворяться, что боевой `baza.kinologlife.online` уже отвечает этим контрактом: на сервере ещё предыдущая сборка.
 
-## 1. Репозитории, ветки, SHA
-
-Публичная оболочка и новый кабинет лежат в git:
+## 1. Репозиторий
 
 - Репозиторий: `https://github.com/vasapbro/dara`
 - Ветка: `cursor/online-school-shell-f1f6`
-- HEAD: `697b2aa614f378085b8a886d46d304b3b711679a`
+- Родитель этого изменения: `b07f58713f84824ec61354f47dfb86cdb117e2fa`
 - База `master`: `d80eeb4709f1acb8c99369fe995d1438829ef05b`
-- Других веток на origin нет.
+- Каталоги: `kinologlife-shell/`, `kinologlife-cabinet/`
 
-Коммиты ветки поверх `master`, от новых к старым:
+Коммит, который вводит сессию CRM, каталог, прогресс и playback, указан в конце файла после публикации.
 
-| SHA | Смысл |
-| --- | --- |
-| `697b2aa614f378085b8a886d46d304b3b711679a` | Вёрстка входа и списка уроков |
-| `220ff914c2eaef3540a9c0ea26c1e2550490030c` | Переход с сессии сайта в кабинет без второго пароля |
-| `7120d2749ae311ef9dc735d09a7b3ff874c49b79` | Кабинет: два раздела и Kinescope |
-| `2c803152b3838ed26673e3a126a8455ceeeb3f0a` | Меню и блок причин на главной |
-| `123f775d1c97eafba9105d5550c68a5bcd4561aa` | Герой на акварельном лугу |
-| `eeeff8342809abaa74ffbff31cd951a99051e554` | Акварельная оболочка |
-| `cc60cce3137e581ecf0bafabcaf09e5eba6e9d42` | Публичная оболочка |
-
-Каталоги в репозитории: `kinologlife-shell/`, `kinologlife-cabinet/`.
+На origin этой ветки нет веток iOS и CRM. Их коммиты в dara не входят.
 
 На VPS, не в git:
 
-- Оболочка: `/root/kinologlife_shell` (код отдаётся контейнером как `/app`).
-- Кабинет: `/root/kinologlife_cabinet/app` (том `/app`), данные `/root/kinologlife_cabinet/data`, секреты в файле рядом с compose, в git его нет.
-- WordPress: `/root/wp_kinologlife/kinologlife_wp_html`, mu-plugins в `wp-content/mu-plugins/`.
-- Старый кабинет Next.js: `/root/kinolog_baza`. Публичный хост на него больше не смотрит. Контейнер `kinolog_baza-frontend` оставлен как есть.
-- CRM: `/root/kinolog_crm`. Каталога `.git` в корне CRM нет. Это отдельное приложение (backend на Python, frontend), не коммит dara.
+- Оболочка: `/root/kinologlife_shell`
+- Кабинет: `/root/kinologlife_cabinet/app`, данные `/root/kinologlife_cabinet/data`, секреты в файле рядом с compose
+- WordPress: `/root/wp_kinologlife/kinologlife_wp_html`
+- Старый кабинет Next.js: `/root/kinolog_baza`. Контейнер `kinolog_baza-frontend` не трогать
+- CRM на диске: `/root/kinolog_crm`
 
-SHA-256 файлов на диске совпал с деревом коммита `697b2aa`:
+Снимок файлов на диске от 29 октября совпадал с `697b2aa614f378085b8a886d46d304b3b711679a`. Этот коммит на сервер ещё не скопирован.
 
-| Файл на сервере | SHA-256 |
+## 2. Что стоит на хосте и что меняет этот коммит
+
+Проверено ранее, контейнеры не перезапускались этим проходом.
+
+| Контейнер | Куда слушает |
 | --- | --- |
-| `/root/kinologlife_shell/server.js` | `6752352af67c999d7fd57261edf36e69df8482ee470b2fce302f892d1ca21a0f` |
-| `/root/kinologlife_cabinet/app/server.js` | `122a5baa96fac1b7feebdae4f2e10088a707ce682b0f09f308cd78297c22d464` |
-| `/root/kinologlife_cabinet/app/lessons.js` | `5de8b4182725d87f14d946cbccaf9d09e5376fae0b649a84f9cbee4872641309` |
-| `/root/kinologlife_cabinet/app/public/cabinet.css` | `decaf864314a5574458a1eb05df52947a26e6013b41743b6a04d0e7320d35b2e` |
-| `.../mu-plugins/kl-shell-public.php` | `057c1e814dbd3c49f485297563c1346ec3e972c41da95221f50a108246d03dba` |
-| `.../mu-plugins/kl-cabinet-auth.php` | `11ce10266c1230b21afa577f11ec429ad5c7c4d05f5629380c64d6b43a43cedf` |
-| `/etc/nginx/snippets/kinologlife-shell.conf` | `b852347664b37500d2bcee425b1907b7c353b11146b177d75414a679ade3441d` |
+| `kinologlife_shell` | `127.0.0.1:3020` |
+| `kinologlife_cabinet` | `127.0.0.1:3021` |
+| `kinolog_baza-frontend` | `127.0.0.1:3003` и `127.0.0.1:3011` |
+| `wp_kinologlife-wordpress-1` | `127.0.0.1:8088` |
 
-## 2. Что уже стоит и куда смотрит nginx
+`kinologlife.online`: nginx отдаёт на оболочку `/`, `/kak-ustroeno`, `/tarif`, `/register`, `/login`, `/account`, `/shell-assets/`, `/shell-health`. Оплата Robokassa остаётся на `/tarif`, 1 990 ₽. Голый `GET /join/` уходит на `/tarif`. Статьи и юридические страницы остаются на WordPress.
 
-Проверено `docker ps` в момент снятия.
+`baza.kinologlife.online`: `location /` смотрит на `127.0.0.1:3021`. Откат nginx: `/root/nginx-backups/baza.bak-cabinet-20261029-131041`.
 
-| Контейнер | Состояние | Куда слушает |
-| --- | --- | --- |
-| `kinologlife_shell` | Up | host network, процесс на `127.0.0.1:3020` |
-| `kinologlife_cabinet` | Up | host network, процесс на `127.0.0.1:3021` |
-| `kinolog_baza-frontend` | Up 8 weeks | `127.0.0.1:3003` и `127.0.0.1:3011` |
-| `wp_kinologlife-wordpress-1` | Up | `127.0.0.1:8088` |
-| `kinolog_crm-db-1` | Up, healthy | `127.0.0.1:5432` |
-| `kinolog_baza-db` | Up | `127.0.0.1:5436` |
+Живой кабинет на порту 3021 всё ещё прежняя сборка: вход паролем WordPress и одноразовый переход `kl_cabinet_go`. Код в этом коммите её заменяет. Пока файлы не скопированы и в окружении кабинета не задан `CRM_BASE_URL`, боевой хост этим контрактом не отвечает. Без `CRM_BASE_URL` новый процесс сессию не открывает. Копировать код и перезапускать только `kinologlife_cabinet` и `kinologlife_shell`. Контейнер `kinolog_baza-frontend` не перезапускать.
 
-Контейнера приложения CRM в этом списке не было. Код CRM на диске есть, база CRM поднята. Имя публичного URL CRM в этот документ не входит.
+`CRM_BASE_URL` — origin CRM без пользователя и пароля в URL, без завершающего слэша. Значение в git не кладётся. Кабинет ходит только на два пути ниже.
 
-`kinologlife.online`. Порты 80 и 443 оба проксируют (TLS снимает площадка). Сниппет `/etc/nginx/snippets/kinologlife-shell.conf` отдаёт на `127.0.0.1:3020` пути `/`, `/kak-ustroeno`, `/tarif`, `/register`, `/login`, `/account`, `/shell-assets/`, `/shell-health`. Голый `GET /` с признаками WordPress (`kl_baza_sso`, `kl_confirm`, превью, `rest_route` и соседние) остаётся на WordPress `127.0.0.1:8088`. Голый `GET /join/` плагин уводит на `/tarif`. Возврат Robokassa (`rb_paid`, `pt`, cookie заявки и служебные флаги) остаётся на WordPress. Статьи, оферта, политики, `wp-admin` — WordPress.
+## 3. Сессия только из CRM
 
-Живые страницы оболочки:
-
-- `https://kinologlife.online/`
-- `https://kinologlife.online/kak-ustroeno`
-- `https://kinologlife.online/tarif` — оплата, Robokassa, цена клуба 1 990 ₽
-- `https://kinologlife.online/register`
-- `https://kinologlife.online/login`
-- `https://kinologlife.online/account`
-- `GET /shell-health` → текст `ok`
-
-`baza.kinologlife.online`. Файл `/etc/nginx/sites-available/baza`. `location /` проксирует на `http://127.0.0.1:3021`. Старый сокет коворкинга из этого файла убран. Откат nginx: `/root/nginx-backups/baza.bak-cabinet-20261029-131041`.
-
-Кабинет: `https://baza.kinologlife.online/`. `GET /health` → `{"ok":true}`.
-
-Что умеет кабинет сейчас: вход тем же паролем WordPress, список из двух разделов, страница урока с iframe Kinescope и отметкой «пройден». Квизов, лапок, коворкинга и формы оплаты в нём нет. Оплата остаётся на `/tarif`.
-
-## 3. Пользователи школы и вход
-
-Учётная запись школы — пользователь WordPress. Отдельной таблицы учеников и второго хранилища паролей нет.
-
-Роль регистрации оболочки — `subscriber`. Логин равен email. Пароль пишет `wp_insert_user` как обычный пароль WordPress.
-
-Регистрация `POST` на `admin-post.php`, `action=kl_shell_register`. Поля: `kl_email`, `kl_name`, `kl_password`, согласие `kl_shell_pdn`, nonce `kl_shell_nonce` (действие `kl_shell`), скрытое поле `company` — ловушка. Успех ставит cookie WordPress и ведёт на `/account?welcome=1`. Мета: `kl_email_verified=0`, `kl_shell_registered` = unix-время. Срок подписки регистрация не пишет. Письмо подтверждения уходит, если на сайте есть функции выдачи токена. Ошибки — редирект на `/register?error=`: `nonce`, `1`, `rate`, `consent`, `email`, `exists`, `fields`. Лимит 8 попыток за 15 минут с одного IP.
-
-Вход на сайт `POST`, `action=kl_shell_login`. Поля `kl_login` (email или логин), `kl_password`, nonce, необязательный `next` только на путь этого же сайта. Внутри `wp_signon` с `remember`. Успех — редирект на `next` или `/account`. Ошибки: `/login?error=1`, `nonce`, `rate` (10 попыток / 15 минут с IP).
-
-Выход: `POST action=kl_shell_logout` с тем же nonce, затем редирект на `/`.
-
-Состояние для оболочки, без сессии, проверено живьём:
-
-`GET /wp-admin/admin-post.php?action=kl_shell_me` → 200
+Пароль школы не создаётся и не проверяется. `POST /login` тело не читает как пароль и отвечает `405`:
 
 ```json
-{"ok":true,"logged_in":false,"name":"","email":"","has_access":false,"access_until_unix":0,"access_until_label":"","recurring_active":false,"force_password":false,"email_verified":null,"sso_url":""}
+{"ok":false,"error":"no_school_password"}
 ```
 
-`POST` на тот же `kl_shell_me` → 405 `{"ok":false}`.
+`GET /login` — страница без поля пароля. Текст: сессия приходит из общего аккаунта, собака не нужна.
 
-Когда человек вошёл, те же поля заполняются из пользователя. `email_verified`: `true` при мете `1`, `false` при `0`, `null` если меты нет. `sso_url` непустой только при доступе к урокам и равен `https://kinologlife.online/wp-admin/admin-post.php?action=kl_cabinet_go`. `force_password` истинно при `kl_rb_force_pw=1`. `recurring_active` истинно при `kl_rb_recurring_active=1`.
+Вход в уроки:
 
-Оплата с оболочки не реализована заново. `GET action=kl_shell_pay` без сессии вернул `ok`, `price` 1990, `curator_price` 14990, `configured` true, `consent_required` true и HTML nonce Robokassa (`kl_rb_nonce`, действие `kl_rb_start`). Форма на `/tarif` уходит в существующий `action=kl_rb_start_sub`. Result URL Robokassa не менялся.
+1. Приложение уже держит сессию CRM. Повторный пароль не спрашивается.
+2. CRM выдаёт одноразовый билет.
+3. Браузер открывает `GET https://baza.kinologlife.online/enter?t=БИЛЕТ`.
+4. Кабинет сам делает `POST {CRM_BASE_URL}/api/v1/online-school/session` с телом `{"ticket":"..."}`. Cookie браузера в CRM не уходит.
+5. Успех — cookie `kl_cab` и `303` на `/`.
 
-### Переход сайт → кабинет
+Билет: `^[A-Za-z0-9_-]{20,512}$`. Иначе `303 /login?error=link`.
 
-Cookie кабинета не ставится на `.kinologlife.online`. Связка одноразовая.
+Ответ CRM `200` и JSON. Кабинет берёт только:
 
-1. Кнопка «Перейти к урокам» или «Войти с сайта» открывает `GET action=kl_cabinet_go`.
-2. Без сессии WordPress ответ 302 на `https://kinologlife.online/login`. Это проверено.
-3. С сессией плагин кладёт на 90 секунд transient `klgo_` + sha256 токена = id пользователя, заголовок `Referrer-Policy: no-referrer`, 302 на `https://baza.kinologlife.online/enter?t=...`. Токен — 32 случайных байта в base64url.
-4. Кабинет `GET /enter?t=` шлёт токен сервером на `kl_cabinet_redeem`. Transient сразу удаляется. Успех: cookie `kl_cab` и 303 на `/`.
-5. Повтор той же ссылки, битый `t` или пустой `/enter` → 303 на `/login?error=link`. Пустой `/enter` проверен: 303 `/login?error=link`. Текст на странице: «Ссылка на уроки устарела. Откройте их снова со страницы доступа.»
+| Поле | Правило |
+| --- | --- |
+| `client_id` | строка `^[A-Za-z0-9_-]{1,80}$` |
+| `session` | непрозрачная строка `^[A-Za-z0-9_-]{8,200}$`, кабинет её не разбирает |
+| `access` | `active`, `gifted`, `none` или `expired` |
+| `name` | строка, обрезается до 80 символов |
+| `wp_user_id` | только положительное целое, иначе `null` |
 
-Прямой вход в кабинет остаётся. `POST /login` поля `email` и `password`. Кабинет спрашивает WordPress `kl_cabinet_login` (`wp_authenticate`, cookie WordPress браузеру не ставится). Пустые поля проверены: 303 `/login?error=1`. Чужой или неверный пароль — тот же код. Лимит 8 попыток за 15 минут и в PHP, и в процессе Node; при лимите `/login?error=rate`.
+Поле почты в ответе CRM игнорируется. По почте ученик не ищется и не создаётся.
 
-Сессия кабинета: cookie `kl_cab`, HttpOnly, Secure, SameSite=Lax, Path=/, Max-Age 14 суток, без атрибута Domain (только хост `baza`). Полезная нагрузка: `uid`, `exp`, `csrf`, подписана HMAC. На каждый запрос доступ перепроверяется через `kl_cabinet_access`, кэш в памяти 45 секунд, при отказе WordPress страница «Не удалось проверить доступ». Выход — `POST /logout` с тем же `csrf`.
+Любой другой статус, пустой JSON или неверная форма — `303 /login?error=link`. Если `CRM_BASE_URL` пуст, тот же отказ. Таймаут запроса к CRM — 8 секунд.
 
-Без доступа список уроков не отдаётся, есть ссылка на `https://kinologlife.online/tarif`. С доступом `GET /` — два раздела, `GET /lesson/{section}/{slug}` — урок, `POST /lesson/{section}/{slug}/done` переключает отметку.
+Cookie `kl_cab`: HttpOnly, Secure, SameSite=Lax, Path=/, Max-Age 14 суток, без Domain (только хост `baza`). Подпись HMAC кабинета. Внутри: `client_id`, `crm_session`, `name`, `exp`, `csrf`. Старая cookie с `uid` WordPress не принимается.
 
-Старый путь тестировщика `GET https://baza.kinologlife.online/api/client/wp-sso` новый кабинет не обслуживает: запрос без сессии заканчивается страницей входа кабинета. Константа в `kl-tester-invite.php`: `KL_TESTER_BAZA_CALLBACK` = origin baza + `/api/client/wp-sso`.
+На каждый запрос доступ читается заново:
 
-## 4. Какие API есть на самом деле
+`POST {CRM_BASE_URL}/api/v1/online-school/access`
 
-Каталога, прогресса и профиля в виде публичного JSON для приложения нет. Каталог — файл `lessons.js`, страница рисуется HTML. Прогресс — локальный JSON, не HTTP.
+```json
+{"client_id":"...","session":"..."}
+```
 
-### Оболочка, admin-post
+Ответ `200`: `access` из того же набора и необязательный `wp_user_id`. Иной ответ — страница и API `503` `{"ok":false,"error":"crm"}`, каталог не отдаётся. Память процесса держит ответ 45 секунд.
 
-База: `https://kinologlife.online/wp-admin/admin-post.php?action=`
+`has_access` истинен только для `active` и `gifted`. `none` и `expired` каталог не открывают.
 
-| action | Метод | Кто вызывает | Ответ |
+Выход: `POST /logout` с тем же `csrf`. Cookie сбрасывается.
+
+### Ученика по почте школа не создаёт
+
+`kl_shell_register` пользователя WordPress не вставляет. Любой вызов сразу уводит на `/register?error=crm`.
+
+Страница `https://kinologlife.online/register` форму пароля не показывает. Текст: регистрация начинается в приложении, `source` / `ref` = `online_school`, `POST /api/v1/auth/client/register` на стороне CRM. Собаку страница не спрашивает.
+
+Почта занята — это ответ CRM `409 EMAIL_TAKEN`. Школа второй записи не заводит.
+
+### Старый аккаунт WordPress — только ручная связь
+
+`wp_user_id` из CRM сохраняется как `manual_wp_user_id`, если это положительное целое. Это уже согласованная связь. Само по себе число доступ не открывает. Совпадение почты слиянием не является. Кабинет пользователя WordPress по почте не ищет и записи не склеивает.
+
+Старые ключи прогресса по числовому id WordPress в новый файл не переносятся.
+
+### Собака не нужна
+
+В сессии, каталоге, прогрессе и регистрации поля собаки нет. Картинки луга на странице — оформление, не карточка собаки. Доступ `active` и `gifted` открывает каталог и без собаки.
+
+### Что осталось у WordPress и кабинетом не используется
+
+Вход на `https://kinologlife.online/login` по-прежнему проверяет старый пароль WordPress (`kl_shell_login` / `wp_signon`) для страницы оплаты `/account`. Этот вход cookie кабинета не ставит и ученика не создаёт. Кнопка перехода в уроки с сайта убрана: `sso_url` всегда пустой.
+
+Эндпоинты `kl_cabinet_login`, `kl_cabinet_redeem`, `kl_cabinet_access`, `kl_cabinet_go` в mu-plugin ещё лежат. Новый кабинет их не вызывает. Одноразовый билет WordPress на `/enter` новый код пытается обменять в CRM и, не получив ответ CRM, уводит на `/login?error=link`.
+
+`GET /api/client/wp-sso` кабинет не реализует.
+
+## 4. Каталог, прогресс, playback
+
+База: `https://baza.kinologlife.online`. Браузер ходит с cookie `kl_cab`. Без cookie API отвечает `401` `{"ok":false,"error":"session"}`, HTML-страницы — `303 /login`.
+
+`GET /health` без сессии: `{"ok":true}`.
+
+Каталог в коде: `kinologlife-cabinet/lessons.js`. Два раздела, `obuchenie` и `zapisi`. Идентификаторы роликов в JSON каталога наружу не отдаются.
+
+### Каталог
+
+`GET /api/catalog`
+
+Доступ `active` или `gifted`, оба отдают один и тот же список:
+
+```json
+{
+  "access": "gifted",
+  "manual_wp_user_id": null,
+  "sections": [
+    {
+      "id": "obuchenie",
+      "title": "Обучение",
+      "lead": "Короткие практические темы. Список можно дополнять по одной.",
+      "lessons": [
+        {
+          "slug": "marker",
+          "title": "Как приучить к маркеру",
+          "note": "Маркер — короткий звук перед наградой. Собака учится: этот звук значит, что ценное уже в пути.",
+          "done": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+`access=gifted` и `access=active` собираются одной функцией. Отличается только поле `access` и `manual_wp_user_id`, если CRM его прислал. Названия, slug и заметки совпадают. Локальная проверка с подставным CRM это подтвердила: шесть уроков, первый — «Как приучить к маркеру».
+
+`none` и `expired`: `403`
+
+```json
+{"access":"none","sections":[]}
+```
+
+HTML в этом случае — закрытая страница без названий уроков. Текст говорит, что оплаченная и подаренная подписка открывают один каталог. Регистрация сама уроки не включает.
+
+Уроки сейчас:
+
+| Раздел | slug | Название |
+| --- | --- | --- |
+| obuchenie | marker | Как приучить к маркеру |
+| obuchenie | stay | Как учить выдержке команды |
+| zapisi | heel-enzi | Выправка: работа с Энзи |
+| zapisi | fix-heel | Чиним выправку |
+| zapisi | emergency-sit | Аварийное «Сидеть» |
+| zapisi | recall-proof | Подзыв на сложных собаках |
+
+### Прогресс
+
+Ключ — строка `client_id` CRM, не id WordPress. Файл данных процесса: `progress.json` в `DATA_DIR` (на сервере `/root/kinologlife_cabinet/data`). Внутри ключ `section/slug`, значение — unix в миллисекундах, если урок отмечен. Файл один на процесс.
+
+`GET /api/progress`
+
+С доступом `active` или `gifted`:
+
+```json
+{"access":"active","items":{"obuchenie/marker":1761740000000}}
+```
+
+Без права смотреть: `200` и `items: {}`. Записи при этом не стираются.
+
+`POST /api/progress`
+
+```json
+{"section":"obuchenie","slug":"marker","done":true}
+```
+
+- `200` `{"ok":true,"key":"obuchenie/marker","done":true}`
+- `400` `{"ok":false,"error":"lesson"}` — нет такого урока или `done` не boolean
+- `403` `{"access":"none"}` или `{"access":"expired"}`
+
+`done: false` снимает отметку.
+
+Страница урока по-прежнему переключает отметку формой `POST /lesson/{section}/{slug}/done` с `csrf`. Это тот же файл.
+
+### Playback
+
+`GET /api/playback?section=obuchenie&slug=marker`
+
+Только при `active` или `gifted`:
+
+```json
+{
+  "access": "gifted",
+  "embed_url": "https://kinescope.io/embed/ИД?drmauthtoken=КОРОТКИЙ_JWT",
+  "expires_in": 300
+}
+```
+
+Нет урока или пустой id ролика: `404` `{"ok":false,"error":"lesson"}`. Нет права: `403` `{"access":"..."}`.
+
+Страница `GET /lesson/{section}/{slug}` вставляет тот же `embed_url` в iframe. Без права смотреть урок уводит на `/`.
+
+## 5. Kinescope: короткий токен зрителю
+
+Секрет подписи и любой токен API Kinescope остаются только на стороне школы, в окружении процесса кабинета. В HTML, в JSON каталога и в приложении их нет. В репозитории токена API Kinescope нет. Кабинет в `api.kinescope.io` не ходит.
+
+Зрителю уходит JWT на 300 секунд, алгоритм HS256, в query `drmauthtoken`:
+
+`https://kinescope.io/embed/{embedId}?drmauthtoken={jwt}`
+
+Поля JWT: `iss` = `kinologlife-cabinet`, `aud` = `kinescope`, `sub` = `client_id`, `access` (`active` или `gifted`), `lesson` = `section/slug`, `vid` = id ролика, `exp`. Подпись — тот же HMAC, что у cookie кабинета. Значение не публикуется.
+
+Проверка права на просмотр: Kinescope вызывает школу.
+
+`POST /api/kinescope/authorize`
+
+Тело, которое присылает Kinescope: `id`, `ip`, `type`, `token`, `user_agent`. Кабинет смотрит только `token`. Ответ без тела.
+
+- `200` — JWT подписан, не просрочен, `access` это `active` или `gifted`, `vid` совпал с id ролика этого урока
+- `403` — иначе
+
+Поле `id` в вызове Kinescope часто UUID, а не id встраивания. Кабинет его с id ролика не сравнивает. Решение Kinescope принимает по коду ответа. Для строгого режима нужен именно HTTP 200.
+
+Оператор один раз указывает в кабинете Kinescope адрес `https://baza.kinologlife.online/api/kinescope/authorize`. Кабинет этот адрес сам не прописывает: токена API Kinescope у процесса нет. Пока колбэк не включён, публичный embed может открываться и без проверки. Зритель всё равно получает только короткий JWT, не секрет.
+
+Id роликов в `lessons.js` не менялись:
+
+| slug | id |
+| --- | --- |
+| marker | `wuFs5EfuUYdsSH3Y8B78XN` |
+| stay | `hZ4sttbTLheMzWg2JYB1Tr` |
+| heel-enzi | `qNfzV7vy2uriexmepPkhy5` |
+| fix-heel | `6ZwUBRf6cXVXjtw6SvB16u` |
+| emergency-sit | `iM2c6yFb4xbS5oHiYYCF1B` |
+| recall-proof | `iYjwpUuGCceZuKTv7AkaQQ` |
+
+## 6. Как кабинет читает доступ
+
+Источник права смотреть — только ответ CRM `access`. Мета WordPress `kl_sub_articles_until` и `kl_sub_video_until` кабинет больше не читает.
+
+| `access` | Каталог | Playback | Прогресс на запись |
 | --- | --- | --- | --- |
-| `kl_shell_boot` | GET | страница оболочки | 200 `{"ok":true,"nonce_html":"..."}` |
-| `kl_shell_me` | GET | страница оболочки | JSON из раздела 3. Иной метод — 405 |
-| `kl_shell_pay` | GET | страница тарифа | цена, флаги Robokassa, nonce. Иной метод — 405 |
-| `kl_shell_login` | POST | форма | редирект, не JSON |
-| `kl_shell_register` | POST | форма | редирект, не JSON |
-| `kl_shell_logout` | POST | форма | редирект |
+| `active` | полный, те же уроки | да | да |
+| `gifted` | тот же полный каталог | да | да |
+| `none` | `403`, пустой `sections` | нет | нет |
+| `expired` | `403`, пустой `sections` | нет | нет |
 
-### Кабинет ↔ WordPress, только сервер-сервер
+Подарок не превращается в отдельный флаг школы. Если CRM прислал `gifted`, ученик видит тот же каталог, что при оплаченной подписке. Регистрация сама значение `active` не ставит: пока CRM не прислал `active` или `gifted`, уроки закрыты.
 
-Кабинет ходит на WordPress по `127.0.0.1:8088`, Host `kinologlife.online`, заголовок `X-KL-Cabinet`. Секрет — опция `kl_cabinet_shared_secret` (не autoload) и переменная процесса кабинета. Значение короче 32 символов или неверный заголовок: HTTP 404 `{"ok":false}`. Это не публичный API браузера.
+Цена продукта по-прежнему 1 990 ₽ в месяц на `https://kinologlife.online/tarif`. Оплату урока кабинет не проводит и покупку не имитирует. Когда CRM решит, что оплата или подарок открыли доступ, он отдаёт `active` или `gifted`. Как именно CRM выставляет это поле, школа не дублирует.
 
-`POST action=kl_cabinet_login`, тело form: `email`, `password`.
+Старые способы WordPress (промокод, инвайт, `club_days`) по-прежнему пишут until в мета пользователя. Для нового кабинета это не доступ, пока CRM явно не прислал `active` или `gifted` и, при ручной связи, `wp_user_id`.
 
-- 200: `{"ok":true,"uid":число,"name":"...","email":"...","has_access":bool,"access_until":unix}`
-- 401: `{"ok":false,"error":"auth"}` — пустые поля, пароль длиннее 200, неверный пароль
-- 429: `{"ok":false,"error":"rate"}`
-- 404: нет или неверен секрет
+## 7. Один аккаунт
 
-`POST action=kl_cabinet_access`, тело `uid`. Успех — тот же объект. Нет пользователя или `uid<=0` — 404 `{"ok":false}`.
+Соблюдено на стороне школы в этом коммите:
 
-`POST action=kl_cabinet_redeem`, тело `token`. Токен должен совпасть с `^[A-Za-z0-9_-]{20,128}$`. Успех — тот же объект доступа. Неверный или уже использованный токен — 401 `{"ok":false}`.
-
-`GET action=kl_cabinet_go` — браузерный редирект из раздела 3, не JSON. Не-GET — 405.
-
-Браузерные маршруты кабинета отдают HTML или редирект. `GET /health` — единственный JSON кабинета наружу: `{"ok":true}`.
-
-### WordPress REST `kl/v1`, уже занятые школой и CRM
-
-Без заголовка `X-KL-CRM-Token` проверено:
-
-- `GET /wp-json/kl/v1/online-users` → 401 `{"code":"kl_rb_log_forbidden","message":"Missing X-KL-CRM-Token","data":{"status":401}}`
-- `POST /wp-json/kl/v1/online-funnel-snapshot` → тот же 401
-- `POST /wp-json/kl/v1/baza-verify-login` с пустым JSON → 401 `{"code":"rest_forbidden","message":"Извините, вам не разрешено выполнять данное действие.","data":{"status":401}}`
-- `POST /wp-json/kl/v1/user-subscription-access` → тот же `rest_forbidden`
-- `POST /wp-json/kl/v1/promo-codes/validate` с пустым телом → 200 `{"valid":false}` (этот метод без CRM-токена ответил)
-
-Заголовок старого серверного доступа baza: `x-baza-key`. Значение не приводится.
-
-`GET /wp-json/kl/v1/online-users` — список. Ответ: `items`, `total`, `page`, `per_page`, `total_pages`. Элемент `items`:
-
-`wp_user_id`, `user_login`, `user_email`, `display_name`, `registered_at` (ISO), `wp_roles`, `role_labels`, `is_admin`, `is_tester`, `access_kind`, `access_label`, `access_active`, `articles_active`, `video_active`, `articles_until`, `video_until`, `telegram_id`, `telegram_username`, счётчики и список активных устройств (`ip`, `ua`, `last_seen`, `source`).
-
-`access_kind`: `admin` (право `manage_options`, подпись «Админ»), `club` (видео или старый клуб, подпись «Клуб (видео + база)»), `articles` («База знаний»), `none` («Нет подписки»). `is_tester` — мета `kl_tester`.
-
-`POST /wp-json/kl/v1/online-users` создаёт пользователя WordPress. Поля: `user_login`, `user_email`, `user_pass`, `display_name`, `club_days`. После успешной вставки код пишет `kl_tester=1`, `kl_tester_source=crm`, `kl_email_verified=1` и вызывает выдачу дней. Ответ 201 `{"item": ...}` — та же строка, что в списке. Ошибки из кода: `kl_crm_users_bad_request` 400, `kl_crm_users_bad_email` 400, `kl_crm_users_login_taken` 409, `kl_crm_users_email_taken` 409, `kl_crm_users_create_fail` 400 или 500.
-
-`POST /wp-json/kl/v1/online-users/{id}` меняет те же поля и может дописать `club_days`. 200 `{"item": ...}`. Ошибки: `kl_crm_users_not_found` 404, логин или email заняты 409, `kl_crm_users_update_fail` 400 или 500.
-
-Выдача дней `kl_crm_online_users_grant_club_days`: дни от 1 до 3650, срок = max(сейчас, текущие articles, текущие video) + дни × 86400. Пишет и `kl_sub_articles_until`, и `kl_sub_video_until`. Ноль дней ничего не продлевает.
-
-`POST /wp-json/kl/v1/online-user-profiles` — профили по списку id. В коде ответ `{"items":[...]}` с `user_email` и соседними полями; больше 300 id → 400 `{"error":"too_many_ids","max":300}`.
-
-`POST /wp-json/kl/v1/online-funnel-snapshot` — снимок для воронки CRM. Больше 300 записей → 400 `{"error":"too_many","max":300}`. Иначе 200 `{"results":[...]}`. Поля результата, которые читает код: `has_wp_account`, `tg_linked`, `payment_count`, `payment_sum`, `first_paid_at`, `last_paid_at`, `has_active_access`, `has_promo`, `promo_code`, `promo_access_active`, `promo_duration_days`. Id ищется по ключам `wp_user_id`, `user_id`, `lk_user_id`. Живой успешный снимок в этот проход не снимался: без токена метод закрыт.
-
-Рядом, тем же токеном CRM, уже висят и не являются кабинетом: `GET /subscription-payments`, `GET /subscription-active-stats`, `GET /site-period-stats`, `POST /send-email`, промокоды ниже. Их контракт для школы не расширять втихую.
-
-Старая проверка пароля для прежнего кабинета, заголовок `x-baza-key`:
-
-`POST /wp-json/kl/v1/baza-verify-login`, JSON `login` и `password`.
-
-- 400 `{"ok":false,"error":"credentials_required"}`
-- 429 `{"ok":false,"error":"rate_limited"}`
-- 401 `{"ok":false,"error":"invalid_credentials"}`
-- 200: `ok`, `login`, `user_id`, `is_admin`, `has_minimum_access`, `has_articles`, `has_video`
-
-`POST /wp-json/kl/v1/user-subscription-access` и `POST /user-subscription-access-by-cookie` отдают полный набор доступа (поля в разделе 6). Без ключа снаружи — `rest_forbidden`, тело метода не разбирается.
-
-`POST /wp-json/kl/v1/baza-cancel-recurring` и `POST /baza-request-password-reset` тоже за тем же ключом. Сброс пароля вызывает штатную почту WordPress. Это не второй пароль школы, и для общего аккаунта его не копировать.
-
-## 5. Kinescope: как даётся просмотр
-
-Кабинет не ходит в API Kinescope и не хранит токен Kinescope. В `/root/kinolog_baza/.env` переменной `KINESCOPE` нет. Ролики остаются на Kinescope.
-
-Право смотреть проверяет кабинет до отрисовки: сессия `kl_cab` и `has_access` из набора WordPress. Нет доступа — iframe не строится, урок редиректит на список. Есть доступ — в страницу вставляется
-
-`https://kinescope.io/embed/{kinescopeId}`
-
-с `allow`: autoplay, fullscreen, picture-in-picture, encrypted-media, gyroscope, accelerometer, clipboard-write, screen-wake-lock. CSP страницы разрешает фреймы `https://kinescope.io`. Отдельной подписи URL кабинетом нет. Ограничение домена, если оно включено, живёт в кабинете Kinescope; новый хост тот же `baza.kinologlife.online`, что у старой школы.
-
-Пустой или неподходящий id (не `^[A-Za-z0-9_-]{8,64}$`) оставляет слот без плеера.
-
-Старый разбор ссылки остался в `/root/kinolog_baza/lib/kinescope-parse.ts`. Старые курсы на диске: `lib/courses/k9-shield.ts`, `lib/courses/stsk9.ts`. Новый кабинет их целиком не подключает.
-
-Текущие id в `lessons.js`:
-
-| Раздел | slug | Название | id |
-| --- | --- | --- | --- |
-| obuchenie | marker | Как приучить к маркеру | `wuFs5EfuUYdsSH3Y8B78XN` |
-| obuchenie | stay | Как учить выдержке команды | `hZ4sttbTLheMzWg2JYB1Tr` |
-| zapisi | heel-enzi | Выправка: работа с Энзи | `qNfzV7vy2uriexmepPkhy5` |
-| zapisi | fix-heel | Чиним выправку | `6ZwUBRf6cXVXjtw6SvB16u` |
-| zapisi | emergency-sit | Аварийное «Сидеть» | `iM2c6yFb4xbS5oHiYYCF1B` |
-| zapisi | recall-proof | Подзыв на сложных собаках | `iYjwpUuGCceZuKTv7AkaQQ` |
-
-Отметка «пройден» не связана с Kinescope. Файл `/root/kinologlife_cabinet/data/progress.json`: ключ — id пользователя WordPress, внутри ключ `section/slug`, значение — unix в миллисекундах. Повторный POST ту же отметку снимает. Это один файл одного процесса, не API и не поле CRM.
-
-## 6. Как записана подписка
-
-Цена клуба в коде и в живом `kl_shell_pay`: `KL_SUB_PRICE_CLUB` = 1990. Комментарий у константы: одна цена клуба, рубли в месяц, для разового счёта — 30 дней. Старая витринная цена `KL_SUB_LIST_PRICE_CLUB` = 4990. Куратор `KL_SUB_PRICE_CURATOR` = 14990; для школьного продукта решение ниже — только 1 990 ₽.
-
-Срок — unix в метах пользователя:
-
-- `kl_sub_articles_until`
-- `kl_sub_video_until`
-- запасной старый вид: если своё поле 0, а `kl_sub_tier` равен `articles` или `video`, берётся `kl_sub_expires`
-- куратор: `kl_curator_until` (в доступ уроков школы сам по себе не входит)
-
-`kl_sub_user_has_tier` истинен, только если соответствующий until больше `time()`.
-
-Набор `kl_baza_access_bundle_for_uid` (его читают и оболочка, и кабинет):
-
-- `has_articles`, `has_video` — по сроку
-- `legacy` — `kl_kb_user_has_legacy_full_community_access`: роль administrator или editor, право `manage_options`, активный уровень Paid Memberships Pro, активная подписка WooCommerce Subscriptions, мета `wpshop_subscription_active` или `_wpcommunity_subscription`
-- `is_staff_account` / `is_unlimited_access` — `manage_options` или `edit_others_posts`
-- `has_minimum_access` = legacy или articles или video или сотрудник
-- `access_until_unix` = max(articles, video). У сотрудника и у legacy срок может быть 0, а доступ при этом есть
-- `recurring_active` — мета `kl_rb_recurring_active` равна `1`. Сама по себе доступ не открывает: если срок уже прошёл, `has_minimum_access` ложен, пока оплата не сдвинет until
-- `recurring_cancelled_at_unix`, `last_payment_unix`, `has_curator`, `subscription_label`
-
-Кабинет считает доступ открытым, если `has_minimum_access` или безлимит или сотрудник.
-
-Четыре состояния, как они лежат в данных:
-
-- Активная. `kl_sub_video_until` или `kl_sub_articles_until` в будущем, либо legacy, либо сотрудник. В CRM-строке `access_kind` будет `club` или `articles`, `access_active` true. У видео `access_kind=club`.
-- Нет подписки. Оба until равны 0 и нет legacy и нет прав сотрудника. `access_kind=none`, `has_access` false, `access_until_unix` 0. Так остаётся человек сразу после регистрации оболочки.
-- Истекла. Until записан и он меньше или равен текущему времени. Мета не стирается, сравнение с `time()` даёт отказ. Рекуррентный флаг может ещё быть `1` — на право смотреть это не влияет.
-- Подарок. Отдельного флага «подарок» кабинет не читает. Подарок становится теми же until, поэтому кабинет его видит. Три уже существующих способа:
-  - Промокод `kl_promo_grant_access` пишет оба until от max(сейчас, текущие сроки), плюс `kl_promo_code`, `kl_promo_access_until`, `kl_promo_duration_days`, `kl_email_verified=1`, `kl_rb_created_via=promo_code`. Продление `kl_promo_extend_user_access` снова пишет оба until и промо-срок.
-  - Инвайт тестировщика `kl_tester_grant_access` пишет оба until на `kl_tester_days()`, мету `kl_tester`, `kl_tester_granted_at`, `kl_email_verified=1`.
-  - CRM `club_days` пишет оба until. Создание пользователя из CRM дополнительно помечает `kl_tester=1` и `kl_tester_source=crm`.
-
-REST промокодов, тот же префикс `kl/v1`: `GET/POST /promo-codes`, `POST /promo-codes/validate`, `POST /promo-codes/trial-issue`, `POST /promo-access/extend`, `POST /promo-codes/revoke`. После применения промокод уведомляет CRM путями `/public/promo-redeem` и `/public/promo-issue-sync` (хост в этом документе не приводится). Успешная оплата Robokassa вызывает `kl_crm_notify_subscription_paid` и пишет оба until, `kl_rb_recurring_active=1` и соседние `kl_rb_recurring_*`, если это рекуррентный клуб.
-
-## 7. Один аккаунт с CRM: что менять
-
-Решения, которые нужно соблюдать. Это задание, а не описание уже сделанного.
-
-- Одно приложение и один аккаунт.
-- Уже существующий клиент входит теми же учётными данными.
-- Новый человек проходит общую регистрацию, которая начинается с онлайн-школы.
-- Контакт попадает в общую CRM, в отдельную воронку онлайн-школы.
+- Один человек. Школа второго ученика по почте не создаёт.
+- Пароль только у CRM. Кабинет пароль не хранит и не проверяет.
+- Уже существующая сессия CRM открывает школу билетом, без второго пароля.
+- Новый человек регистрируется общим `POST /api/v1/auth/client/register`, источник `online_school`.
 - Собака необязательна.
-- Подписка 1 990 ₽ в месяц, подаренный доступ возможен.
+- Подписка 1 990 ₽ в месяц. `access=gifted` открывает тот же каталог.
 - Регистрация бесплатная и сама подписку не включает.
+- Старый аккаунт WordPress связывается только явным `wp_user_id` от CRM. Автослияния по почте нет.
 
-Как это стыкуется с тем, что уже есть.
+Воронка и карточка `Client` остаются у CRM: одна сделка `kind=online_school`, пайплайн `online_main`, собака сделке не нужна. Школа сделку не создаёт.
 
-Пароль один: пароль пользователя WordPress. Оболочка проверяет его через `wp_signon`, кабинет и `baza-verify-login` — через `wp_authenticate`. Вторую систему паролей не заводить. CRM не хранит и не проверяет свой пароль школы. Проверка входа — существующий WordPress.
+## 8. Что ещё не сделано
 
-Школьные учётки и контакты CRM — разные записи. Пользователь школы: WordPress, id `wp_user_id`. Контакт CRM: модель `Client` в `/root/kinolog_crm/backend/app/models/client.py`. Поля контакта: `id`, `full_name`, `phone`, `email`, `telegram_id`, `telegram_username`, UTM, `funnel_stage`, `funnel_auto`, `pipeline_id` и связи. Колонки `wp_user_id` у контакта нет. Собака — отдельная связь `dogs` (`name`, `breed`, `age`, `weight`, `features`, `photo_url`), к регистрации школы не привязана. Кабинет собаку не спрашивает и не хранит.
+- Боевой кабинет на `baza.kinologlife.online` ещё предыдущая сборка. Нужны копия файлов, `CRM_BASE_URL` в секретах процесса и перезапуск только `kinologlife_cabinet` и оболочки. Без базы CRM новый процесс уроки не откроет.
+- Колбэк Kinescope на `/api/kinescope/authorize` оператор включает сам.
+- Прогресс — один JSON. Второй экземпляр кабинета его не разделит. Старые числовые ключи не импортируются.
+- Вход WordPress на публичном `/login` ещё проверяет старый пароль для страницы оплаты. В кабинет эта сессия не проходит.
+- Инвайт тестировщика всё ещё целится в `/api/client/wp-sso`.
+- Разделы контракта после правила воронки на этой машине не были смонтированы. Маршруты выше — сторона школы. Если CRM ждёт другие пути, правка согласуется здесь, а не тихим вторым API.
+- Ветки iOS и CRM не менялись.
 
-Связывать безопасно только явной записью стабильного id: id пользователя WordPress на контакте CRM. Запись появляется после подтверждённого события: почта подтверждена (`kl_email_verified=1`), прошла оплата, или человек в CRM связал записи вручную. Совпадение неподтверждённого email слиянием не является. Регистрация оболочки ставит `kl_email_verified=0`. Пока почта не подтверждена, контакт с таким email не сливать с пользователем WordPress, даже если строки равны. Разные email не связывать автоматически.
+Откат оболочки и кабинета описан в `/cursor/stores/self/docs/shell-status.md`.
 
-Повторная регистрация на тот же email в WordPress уже отвергается (`error=exists` и `email_exists`). Это защита от второго пользователя WordPress, не повод склеить контакт CRM.
-
-Что ещё не сделано и должно появиться отдельным контрактом, а не тихой правкой логина:
-
-- Регистрация оболочки создаёт только пользователя WordPress. Контакт CRM она не создаёт.
-- Воронка, которая уже есть у онлайн-продукта CRM, — стадии `o_reg` («Прошли регистрацию на сайте»), `o_tg` («Привязали ТГ бота»), `o_paid` («Оплатили доступ»), `o_recur_ok` («Повторная оплата получена»), `o_recur_miss` («Повторная оплата не получена»). Это не отдельная воронка онлайн-школы. Школьную воронку нужно завести отдельно и класть туда новый контакт. Старые стадии онлайн-продукта не переиспользовать как школьные.
-- Собака в этой регистрации не нужна. Поле можно оставить пустым.
-- Подписка школы — те же `kl_sub_video_until` и `kl_sub_articles_until` на 30 дней за 1 990 ₽. Подарок — уже существующие промо, инвайт или `club_days`, без нового флага.
-- Регистрация по-прежнему не пишет until.
-
-Пока явной связи нет, снимок `online-funnel-snapshot` умеет только узнать по уже переданному id WordPress, есть ли аккаунт, оплата и промо. Сам он контакт не создаёт.
-
-## 8. Незаконченное и от чего зависит
-
-Не начинать и не откатывать:
-
-- Приложения iOS нет. OSH-4 нет. Веток и коммитов под них нет.
-- Общий логин и API из разделов 3–4 не менять без новой записи в этом файле.
-
-Не сделано и зависит от решения в разделе 7:
-
-- Явное поле связи контакт CRM ↔ `wp_user_id`, запись только после подтверждения.
-- Отдельная воронка онлайн-школы и создание контакта из регистрации школы.
-- Регистрация не требует собаку и не открывает подписку — это уже так на стороне WordPress; сторона CRM ещё не подключена.
-
-Дыры текущего кабинета, их можно чинить отдельно, не трогая контракт входа:
-
-- Прогресс — один JSON на одном процессе. Второй экземпляр кабинета его не разделит.
-- Каталог зашит в `lessons.js`. Длительность роликов Kinescope кабинет не проверяет.
-- Инвайт тестировщика всё ещё целится в `/api/client/wp-sso`, а этот путь новый кабинет не реализует.
-- Старый контейнер `kinolog_baza-frontend` и его процесс не останавливать и не использовать как место деплоя.
-- Публичного JSON профиля, каталога, урока, прогресса и права на видео для приложения нет. Пока его нет, приложение не должно придумывать параллельную дверь. Когда понадобится, контракт пишется сюда до кода.
-
-Откат кабинета и оболочки описан в `/cursor/stores/self/docs/shell-status.md`.
+Код этого контракта — коммит ветки `cursor/online-school-shell-f1f6` сразу поверх `b07f58713f84824ec61354f47dfb86cdb117e2fa`.

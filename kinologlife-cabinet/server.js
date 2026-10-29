@@ -1,4 +1,5 @@
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -9,14 +10,15 @@ const HOST = "127.0.0.1";
 const ROOT = __dirname;
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
 const HMAC = process.env.CABINET_HMAC || "";
-const SHARED = process.env.WP_SHARED_SECRET || "";
-const WP_HOST = process.env.WP_HOST || "127.0.0.1";
-const WP_PORT = Number(process.env.WP_PORT || 8088);
+const CRM_BASE = (process.env.CRM_BASE_URL || "").replace(/\/$/, "");
 const COOKIE = "kl_cab";
 const WEEK = 14 * 24 * 60 * 60 * 1000;
+const PLAYBACK_TTL = 300;
 const ID_OK = /^[A-Za-z0-9_-]{8,64}$/;
+const ACCESS_OK = new Set(["active", "gifted", "none", "expired"]);
+const WATCH = new Set(["active", "gifted"]);
 
-if (HMAC.length < 32 || SHARED.length < 32) {
+if (HMAC.length < 32) {
   console.error("cabinet secrets missing");
   process.exit(1);
 }
@@ -62,41 +64,66 @@ function readSession(req) {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   try {
     const data = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (!data || typeof data.uid !== "number" || data.exp < Date.now()) return null;
-    if (typeof data.csrf !== "string") return null;
+    if (!data || typeof data.client_id !== "string" || data.exp < Date.now()) return null;
+    if (typeof data.csrf !== "string" || typeof data.crm_session !== "string") return null;
     return data;
   } catch {
     return null;
   }
 }
 
-function setCookie(res, value, maxAge) {
-  const parts = [
-    `${COOKIE}=${encodeURIComponent(value)}`,
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax",
-    "Path=/",
-    `Max-Age=${maxAge}`
-  ];
-  res.setHeader("Set-Cookie", parts.join("; "));
+function b64urlJson(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
 
-function wpPost(action, fields) {
-  const body = new URLSearchParams(fields).toString();
+function signJwt(payload) {
+  const data = `${b64urlJson({ alg: "HS256", typ: "JWT" })}.${b64urlJson(payload)}`;
+  const sig = crypto.createHmac("sha256", HMAC).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+
+function verifyJwt(token) {
+  if (typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const expect = crypto.createHmac("sha256", HMAC).update(`${parts[0]}.${parts[1]}`).digest("base64url");
+  const a = Buffer.from(parts[2]);
+  const b = Buffer.from(expect);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    if (!payload || payload.iss !== "kinologlife-cabinet" || payload.aud !== "kinescope") return null;
+    if (typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) return null;
+    if (!WATCH.has(payload.access) || typeof payload.sub !== "string") return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function crmCall(method, pathname, body) {
+  if (!CRM_BASE) return Promise.resolve({ status: 0, json: null });
+  let url;
+  try {
+    url = new URL(pathname, `${CRM_BASE}/`);
+  } catch {
+    return Promise.resolve({ status: 0, json: null });
+  }
+  if (url.username || url.password) return Promise.resolve({ status: 0, json: null });
+  const lib = url.protocol === "https:" ? https : http;
+  const payload = body ? JSON.stringify(body) : "";
   return new Promise((resolve, reject) => {
-    const req = http.request(
+    const req = lib.request(
       {
-        host: WP_HOST,
-        port: WP_PORT,
-        method: "POST",
-        path: `/wp-admin/admin-post.php?action=${action}`,
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: `${url.pathname}${url.search}`,
+        method,
         headers: {
-          Host: "kinologlife.online",
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Content-Length": Buffer.byteLength(body),
-          "X-KL-Cabinet": SHARED,
-          "X-Forwarded-Proto": "https"
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload)
         }
       },
       (res) => {
@@ -114,38 +141,46 @@ function wpPost(action, fields) {
         });
       }
     );
-    req.setTimeout(12000, () => req.destroy(new Error("wp timeout")));
+    req.setTimeout(8000, () => req.destroy(new Error("crm timeout")));
     req.on("error", reject);
-    req.end(body);
+    req.end(payload);
   });
+}
+
+function manualWpId(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
+function parseAccessBody(json) {
+  if (!json || typeof json !== "object") return null;
+  const access = String(json.access || "");
+  if (!ACCESS_OK.has(access)) return null;
+  return { access, manual_wp_user_id: manualWpId(json.wp_user_id) };
 }
 
 const accessCache = new Map();
 
-async function accessFor(uid) {
-  const hit = accessCache.get(uid);
+async function accessFor(session) {
+  const hit = accessCache.get(session.client_id);
   if (hit && Date.now() - hit.at < 45000) return hit.data;
-  const result = await wpPost("kl_cabinet_access", { uid: String(uid) });
-  if (!result.json || !result.json.ok) return null;
-  accessCache.set(uid, { at: Date.now(), data: result.json });
-  return result.json;
-}
-
-const loginHits = new Map();
-
-function loginLimited(email) {
-  const key = email.toLowerCase();
-  const now = Date.now();
-  const rows = (loginHits.get(key) || []).filter((t) => now - t < 15 * 60 * 1000);
-  loginHits.set(key, rows);
-  return rows.length >= 8;
-}
-
-function loginHit(email) {
-  const key = email.toLowerCase();
-  const rows = loginHits.get(key) || [];
-  rows.push(Date.now());
-  loginHits.set(key, rows);
+  const result = await crmCall("POST", "/api/v1/online-school/access", {
+    client_id: session.client_id,
+    session: session.crm_session
+  });
+  const parsed = result.status === 200 ? parseAccessBody(result.json) : null;
+  if (!parsed) return null;
+  const data = {
+    client_id: session.client_id,
+    name: session.name || "",
+    access: parsed.access,
+    manual_wp_user_id: parsed.manual_wp_user_id,
+    has_access: WATCH.has(parsed.access)
+  };
+  accessCache.set(session.client_id, { at: Date.now(), data });
+  return data;
 }
 
 function findLesson(sectionId, slug) {
@@ -184,15 +219,15 @@ function writeProgress(data) {
   fs.renameSync(tmp, progressFile);
 }
 
-function isDone(uid, key) {
+function isDone(clientId, key) {
   const all = readProgress();
-  return Boolean(all[String(uid)] && all[String(uid)][key]);
+  return Boolean(all[String(clientId)] && all[String(clientId)][key]);
 }
 
 function layout(title, body, who) {
   const account = who
     ? `<div class="account">
-         <p class="account__who"><strong>${esc(who.name || "Кабинет")}</strong><span>${esc(who.email || "")}</span></p>
+         <p class="account__who"><strong>${esc(who.name || "Кабинет")}</strong></p>
          <form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(who.csrf)}"><button class="account__out" type="submit">Выйти</button></form>
        </div>`
     : `<a class="account__out" href="https://kinologlife.online/">На сайт</a>`;
@@ -239,23 +274,27 @@ function mast(title, text) {
   </section>`;
 }
 
+function closedCopy(access) {
+  if (access === "expired") return "Срок доступа закончился. Каталог откроется, когда общий аккаунт снова получит подписку или подарок.";
+  return "Подписка ещё не открыта. Регистрация сама уроки не включает. Собака для кабинета не нужна.";
+}
+
 function pageSections(user, access) {
   if (!access.has_access) {
-    const body = `${mast("Уроки", "Доступ откроется после оплаты на сайте школы.")}
+    const body = `${mast("Уроки", closedCopy(access.access))}
       <div class="sheet-wrap"><article class="sheet">
         <h1>Доступ закрыт</h1>
-        <p class="fine">Оплата остаётся на сайте школы, через Robokassa.</p>
-        <p><a class="btn" href="https://kinologlife.online/tarif">Открыть доступ</a></p>
+        <p class="fine">Оплаченная и подаренная подписка открывают один и тот же каталог.</p>
       </article></div>`;
-    return layout("Доступ", body, { csrf: user.csrf, email: access.email, name: access.name });
+    return layout("Доступ", body, { csrf: user.csrf, name: access.name });
   }
   const doneCount = (section) =>
-    section.lessons.filter((lesson) => isDone(user.uid, `${section.id}/${lesson.slug}`)).length;
+    section.lessons.filter((lesson) => isDone(user.clientId, `${section.id}/${lesson.slug}`)).length;
   const blocks = sections
     .map((section) => {
       const cards = section.lessons
         .map((lesson, index) => {
-          const done = isDone(user.uid, `${section.id}/${lesson.slug}`);
+          const done = isDone(user.clientId, `${section.id}/${lesson.slug}`);
           return `<li><a class="card${done ? " is-done" : ""}" href="/lesson/${section.id}/${lesson.slug}">
             <b class="n">${String(index + 1).padStart(2, "0")}</b>
             <span class="copy"><strong>${esc(lesson.title)}</strong><span>${esc(lesson.note)}</span></span>
@@ -278,16 +317,35 @@ function pageSections(user, access) {
       </section>`;
     })
     .join("");
-  const body = `${mast("Уроки", "Короткие темы и полные записи занятий.")}
+  const body = `${mast("Уроки", "Короткие темы и полные записи занятий. Собака не обязательна.")}
     <div class="board" id="sections">${blocks}</div>`;
-  return layout("Уроки", body, { csrf: user.csrf, email: access.email, name: access.name });
+  return layout("Уроки", body, { csrf: user.csrf, name: access.name });
+}
+
+function playbackToken(clientId, access, section, lesson) {
+  return signJwt({
+    iss: "kinologlife-cabinet",
+    aud: "kinescope",
+    sub: clientId,
+    access,
+    lesson: `${section.id}/${lesson.slug}`,
+    vid: lesson.kinescopeId,
+    exp: Math.floor(Date.now() / 1000) + PLAYBACK_TTL
+  });
+}
+
+function embedUrl(lesson, token) {
+  return `https://kinescope.io/embed/${encodeURIComponent(lesson.kinescopeId)}?drmauthtoken=${encodeURIComponent(token)}`;
 }
 
 function pageLesson(user, access, section, lesson) {
   const key = `${section.id}/${lesson.slug}`;
-  const done = isDone(user.uid, key);
-  const player = lesson.kinescopeId && ID_OK.test(lesson.kinescopeId)
-    ? `<div class="player"><iframe src="https://kinescope.io/embed/${encodeURIComponent(lesson.kinescopeId)}" title="${esc(lesson.title)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; gyroscope; accelerometer; clipboard-write; screen-wake-lock" allowfullscreen loading="lazy"></iframe></div>`
+  const done = isDone(user.clientId, key);
+  const token = lesson.kinescopeId && ID_OK.test(lesson.kinescopeId)
+    ? playbackToken(user.clientId, access.access, section, lesson)
+    : "";
+  const player = token
+    ? `<div class="player"><iframe src="${esc(embedUrl(lesson, token))}" title="${esc(lesson.title)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; gyroscope; accelerometer; clipboard-write; screen-wake-lock" allowfullscreen loading="lazy"></iframe></div>`
     : `<div class="player"><div class="player-empty">Видео на Kinescope появится в этом окне.</div></div>`;
   const body = `${mast(section.title, lesson.title)}
     <div class="sheet-wrap"><article class="sheet">
@@ -300,12 +358,14 @@ function pageLesson(user, access, section, lesson) {
         <button class="btn${done ? " done" : ""}" type="submit">${done ? "Пройден · снять отметку" : "Отметить пройденным"}</button>
       </form>
     </article></div>`;
-  return layout(lesson.title, body, { csrf: user.csrf, email: access.email, name: access.name });
+  return layout(lesson.title, body, { csrf: user.csrf, name: access.name });
 }
 
-function sessionCookie(uid) {
+function sessionCookie(session) {
   const token = sign({
-    uid,
+    client_id: session.client_id,
+    crm_session: session.crm_session,
+    name: session.name || "",
     exp: Date.now() + WEEK,
     csrf: crypto.randomBytes(16).toString("hex")
   });
@@ -313,25 +373,17 @@ function sessionCookie(uid) {
 }
 
 function pageLogin(error) {
-  const message = error === "rate"
-    ? "Слишком много попыток. Подождите немного."
-    : error === "link"
-      ? "Ссылка на уроки устарела. Откройте их снова со страницы доступа."
-      : error
-        ? "Неверный адрес или пароль."
-        : "";
-  const body = `${mast("Вход", "Тот же адрес и пароль, что на сайте школы.")}
+  const message = error === "link"
+    ? "Ссылка из общего аккаунта устарела. Откройте онлайн-школу из приложения ещё раз."
+    : error === "crm"
+      ? "Кабинет не смог прочитать сессию CRM."
+      : "";
+  const body = `${mast("Вход", "Сессия приходит из общего аккаунта. Отдельного пароля школы нет.")}
     <div class="login-grid">
       <article class="sheet">
         <h1>Открыть уроки</h1>
-        <p class="fine">Почта и пароль те же, что при оплате на kinologlife.online.</p>
+        <p class="fine">Войдите в приложении Кинолог LIFE и откройте онлайн-школу оттуда. Кабинет пароль не спрашивает и собаку не требует.</p>
         ${message ? `<p class="warn">${esc(message)}</p>` : ""}
-        <form method="post" action="/login">
-          <label>Почта<input type="email" name="email" autocomplete="username" required></label>
-          <label>Пароль<input type="password" name="password" autocomplete="current-password" required></label>
-          <button class="btn" type="submit">Войти</button>
-        </form>
-        <p class="links"><a href="https://kinologlife.online/wp-admin/admin-post.php?action=kl_cabinet_go">Войти с сайта</a><a href="https://kinologlife.online/tarif">Оплатить доступ</a></p>
       </article>
       <aside class="aside">
         <p class="eyebrow">Два раздела</p>
@@ -343,6 +395,22 @@ function pageLogin(error) {
       </aside>
     </div>`;
   return layout("Вход", body, null);
+}
+
+function catalogPayload(clientId) {
+  return {
+    sections: sections.map((section) => ({
+      id: section.id,
+      title: section.title,
+      lead: section.lead,
+      lessons: section.lessons.map((lesson) => ({
+        slug: lesson.slug,
+        title: lesson.title,
+        note: lesson.note,
+        done: isDone(clientId, `${section.id}/${lesson.slug}`)
+      }))
+    }))
+  };
 }
 
 function send(res, status, html) {
@@ -365,6 +433,15 @@ function send(res, status, html) {
   res.end(html);
 }
 
+function sendJson(res, status, payload) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff"
+  });
+  res.end(JSON.stringify(payload));
+}
+
 function redirect(res, location, cookie) {
   const headers = { Location: location, "Cache-Control": "no-store" };
   if (cookie) headers["Set-Cookie"] = cookie;
@@ -372,13 +449,13 @@ function redirect(res, location, cookie) {
   res.end();
 }
 
-function readBody(req) {
+function readBody(req, limit = 20000) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > 20000) {
+      if (size > limit) {
         reject(new Error("body"));
         req.destroy();
         return;
@@ -416,13 +493,43 @@ function serveAsset(res, filePath) {
   });
 }
 
+async function setDone(clientId, key, done) {
+  await withProgress(async () => {
+    const all = readProgress();
+    const row = all[clientId] && typeof all[clientId] === "object" ? all[clientId] : {};
+    if (done) row[key] = Date.now();
+    else delete row[key];
+    all[clientId] = row;
+    writeProgress(all);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://cabinet.local");
   const pathname = url.pathname;
 
   if (req.method === "GET" && pathname === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end('{"ok":true}');
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/kinescope/authorize") {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const payload = verifyJwt(body && body.token);
+      const lessonKey = payload && payload.lesson;
+      const found = lessonKey ? findLesson(String(lessonKey).split("/")[0], String(lessonKey).split("/")[1]) : null;
+      if (!payload || !found || found.lesson.kinescopeId !== payload.vid) {
+        res.writeHead(403);
+        res.end();
+        return;
+      }
+      res.writeHead(200);
+      res.end();
+    } catch {
+      res.writeHead(403);
+      res.end();
+    }
     return;
   }
 
@@ -440,40 +547,38 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === "POST" && pathname === "/login") {
-      const form = new URLSearchParams(await readBody(req));
-      const email = String(form.get("email") || "").trim().toLowerCase();
-      const password = String(form.get("password") || "");
-      if (!email || !password || loginLimited(email)) {
-        redirect(res, loginLimited(email) ? "/login?error=rate" : "/login?error=1");
-        return;
-      }
-      const result = await wpPost("kl_cabinet_login", { email, password });
-      if (!result.json || !result.json.ok || result.json.error) {
-        loginHit(email);
-        const code = result.json && result.json.error === "rate" ? "rate" : "1";
-        redirect(res, `/login?error=${code}`);
-        return;
-      }
-      accessCache.set(result.json.uid, { at: Date.now(), data: result.json });
-      redirect(res, "/", sessionCookie(result.json.uid));
+      await readBody(req);
+      sendJson(res, 405, { ok: false, error: "no_school_password" });
       return;
     }
 
     if (req.method === "GET" && pathname === "/enter") {
       const ticket = url.searchParams.get("t") || "";
-      const existing = readSession(req);
-      const ticketOk = /^[A-Za-z0-9_-]{20,128}$/.test(ticket);
+      const ticketOk = /^[A-Za-z0-9_-]{20,512}$/.test(ticket);
       if (!ticketOk) {
-        redirect(res, existing ? "/" : "/login?error=link");
+        redirect(res, "/login?error=link");
         return;
       }
-      const result = await wpPost("kl_cabinet_redeem", { token: ticket });
-      if (!result.json || !result.json.ok || typeof result.json.uid !== "number") {
-        redirect(res, existing ? "/" : "/login?error=link");
+      const result = await crmCall("POST", "/api/v1/online-school/session", { ticket });
+      const parsed = result.status === 200 ? parseAccessBody(result.json) : null;
+      const clientId = result.json && typeof result.json.client_id === "string" ? result.json.client_id : "";
+      const crmSession = result.json && typeof result.json.session === "string" ? result.json.session : "";
+      const name = result.json && typeof result.json.name === "string" ? result.json.name.slice(0, 80) : "";
+      if (!parsed || !/^[A-Za-z0-9_-]{1,80}$/.test(clientId) || !/^[A-Za-z0-9_-]{8,200}$/.test(crmSession)) {
+        redirect(res, "/login?error=link");
         return;
       }
-      accessCache.set(result.json.uid, { at: Date.now(), data: result.json });
-      redirect(res, "/", sessionCookie(result.json.uid));
+      accessCache.set(clientId, {
+        at: Date.now(),
+        data: {
+          client_id: clientId,
+          name,
+          access: parsed.access,
+          manual_wp_user_id: parsed.manual_wp_user_id,
+          has_access: WATCH.has(parsed.access)
+        }
+      });
+      redirect(res, "/", sessionCookie({ client_id: clientId, crm_session: crmSession, name }));
       return;
     }
 
@@ -484,6 +589,7 @@ const server = http.createServer(async (req, res) => {
         redirect(res, "/login");
         return;
       }
+      accessCache.delete(session.client_id);
       const cookie = `${COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
       redirect(res, "/login", cookie);
       return;
@@ -501,21 +607,74 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (!session) {
-      if (req.method === "GET") {
-        redirect(res, "/login");
+      if (pathname.startsWith("/api/") || req.method !== "GET") {
+        sendJson(res, 401, { ok: false, error: "session" });
         return;
       }
-      res.writeHead(401);
-      res.end();
+      redirect(res, "/login");
       return;
     }
 
-    const access = await accessFor(session.uid);
+    const access = await accessFor(session);
     if (!access) {
-      send(res, 503, layout("Доступ", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p class="warn">Не удалось проверить доступ. Обновите страницу.</p></article></div>`, null));
+      const html = layout("Доступ", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p class="warn">Не удалось прочитать доступ в CRM. Обновите страницу.</p></article></div>`, null);
+      if (pathname.startsWith("/api/")) sendJson(res, 503, { ok: false, error: "crm" });
+      else send(res, 503, html);
       return;
     }
-    const viewer = { uid: session.uid, csrf: session.csrf };
+    const viewer = { clientId: session.client_id, csrf: session.csrf };
+
+    if (req.method === "GET" && pathname === "/api/catalog") {
+      if (!access.has_access) {
+        sendJson(res, 403, { access: access.access, sections: [] });
+        return;
+      }
+      sendJson(res, 200, { access: access.access, manual_wp_user_id: access.manual_wp_user_id, ...catalogPayload(session.client_id) });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/progress") {
+      const all = readProgress();
+      const row = all[session.client_id] && typeof all[session.client_id] === "object" ? all[session.client_id] : {};
+      sendJson(res, 200, { access: access.access, items: access.has_access ? row : {} });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/progress") {
+      if (!access.has_access) {
+        sendJson(res, 403, { access: access.access });
+        return;
+      }
+      const body = JSON.parse(await readBody(req));
+      const found = findLesson(String(body.section || ""), String(body.slug || ""));
+      if (!found || typeof body.done !== "boolean") {
+        sendJson(res, 400, { ok: false, error: "lesson" });
+        return;
+      }
+      const key = `${found.section.id}/${found.lesson.slug}`;
+      await setDone(session.client_id, key, body.done);
+      sendJson(res, 200, { ok: true, key, done: body.done });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/playback") {
+      if (!access.has_access) {
+        sendJson(res, 403, { access: access.access });
+        return;
+      }
+      const found = findLesson(url.searchParams.get("section") || "", url.searchParams.get("slug") || "");
+      if (!found || !ID_OK.test(found.lesson.kinescopeId || "")) {
+        sendJson(res, 404, { ok: false, error: "lesson" });
+        return;
+      }
+      const token = playbackToken(session.client_id, access.access, found.section, found.lesson);
+      sendJson(res, 200, {
+        access: access.access,
+        embed_url: embedUrl(found.lesson, token),
+        expires_in: PLAYBACK_TTL
+      });
+      return;
+    }
 
     if (req.method === "GET" && pathname === "/") {
       send(res, 200, pageSections(viewer, access));
@@ -530,7 +689,7 @@ const server = http.createServer(async (req, res) => {
       }
       const found = findLesson(lessonMatch[1], lessonMatch[2]);
       if (!found) {
-        send(res, 404, layout("Урок", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p>Такого урока нет.</p></article></div>`, { csrf: session.csrf, email: access.email, name: access.name }));
+        send(res, 404, layout("Урок", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p>Такого урока нет.</p></article></div>`, { csrf: session.csrf, name: access.name }));
         return;
       }
       send(res, 200, pageLesson(viewer, access, found.section, found.lesson));
@@ -550,24 +709,16 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const key = `${found.section.id}/${found.lesson.slug}`;
-      await withProgress(async () => {
-        const all = readProgress();
-        const row = all[String(session.uid)] && typeof all[String(session.uid)] === "object"
-          ? all[String(session.uid)]
-          : {};
-        if (row[key]) delete row[key];
-        else row[key] = Date.now();
-        all[String(session.uid)] = row;
-        writeProgress(all);
-      });
+      await setDone(session.client_id, key, !isDone(session.client_id, key));
       redirect(res, `/lesson/${found.section.id}/${found.lesson.slug}`);
       return;
     }
 
-    send(res, 404, layout("Кабинет", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p>Страница не найдена.</p></article></div>`, { csrf: session.csrf, email: access.email, name: access.name }));
+    send(res, 404, layout("Кабинет", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p>Страница не найдена.</p></article></div>`, { csrf: session.csrf, name: access.name }));
   } catch (error) {
     console.error("cabinet", error && error.message ? error.message : "error");
-    send(res, 500, layout("Кабинет", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p class="warn">Не получилось открыть страницу. Обновите её.</p></article></div>`, null));
+    if (pathname.startsWith("/api/")) sendJson(res, 500, { ok: false, error: "server" });
+    else send(res, 500, layout("Кабинет", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p class="warn">Не получилось открыть страницу. Обновите её.</p></article></div>`, null));
   }
 });
 

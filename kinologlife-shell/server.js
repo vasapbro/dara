@@ -166,25 +166,14 @@ const BODIES = {
   <section class="mast">
     <div class="mast__copy">
       <p class="eyebrow">Регистрация</p>
-      <h1>Аккаунт школы</h1>
-      <p class="lead">Пароль задаёте вы. Письмо со ссылкой придёт на почту. Оплата — следующим шагом.</p>
+      <h1>Общий аккаунт</h1>
+      <p class="lead">Новый человек регистрируется в общем аккаунте Кинолог LIFE. Школа отдельный пароль не задаёт и собаку не спрашивает.</p>
     </div>
     <div class="mast__wave" aria-hidden="true"></div>
   </section>
   <section class="sheet">
-    <p class="warn" id="reg-error" hidden></p>
-    <form method="post" action="/wp-admin/admin-post.php" data-shell-nonce="kl_shell_boot">
-      <input type="hidden" name="action" value="kl_shell_register">
-      <span data-nonce-slot></span>
-      <label class="honeypot">Компания<input type="text" name="company" tabindex="-1" autocomplete="off"></label>
-      <label>Имя<input type="text" name="kl_name" required maxlength="80" autocomplete="name"></label>
-      <label>Эл. почта<input type="email" name="kl_email" required autocomplete="email" inputmode="email"></label>
-      <label>Пароль<input type="password" name="kl_password" required minlength="8" maxlength="200" autocomplete="new-password"></label>
-      <label class="check"><input type="checkbox" name="kl_shell_pdn" value="1" required><span>Даю согласие на <a href="/consent-pdn/" target="_blank" rel="noopener">обработку персональных данных</a> и принимаю <a href="/terms-of-use/" target="_blank" rel="noopener">соглашение</a>.</span></label>
-      <button class="btn" type="submit" disabled>Создать аккаунт</button>
-      <p class="warn" data-form-error hidden></p>
-    </form>
-    <p class="fine">Уже регистрировались? <a href="/login">Войти</a></p>
+    <p>Регистрация начинается в приложении: источник <code>online_school</code>, запрос <code>POST /api/v1/auth/client/register</code> на стороне CRM. Эта страница пользователя не создаёт.</p>
+    <p class="fine">Уже есть общий аккаунт — войдите в приложении и откройте онлайн-школу оттуда. Старый аккаунт сайта сам по почте с общим аккаунтом не склеивается.</p>
   </section>`),
 
   "/login": layout("/login", `
@@ -192,7 +181,7 @@ const BODIES = {
     <div class="mast__copy">
       <p class="eyebrow">Вход</p>
       <h1>С возвращением</h1>
-      <p class="lead">Та же почта и пароль, что и раньше.</p>
+      <p class="lead">Это вход в прежний аккаунт сайта, чтобы видеть оплату. Уроки открываются из общего аккаунта в приложении. Школа отдельный пароль не задаёт.</p>
     </div>
     <div class="mast__wave" aria-hidden="true"></div>
   </section>

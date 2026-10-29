@@ -131,71 +131,8 @@ function kl_shell_login(): void
 
 function kl_shell_register(): void
 {
-    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-        wp_safe_redirect(home_url('/register'));
-        exit;
-    }
-    if (is_user_logged_in()) {
-        wp_safe_redirect(home_url('/account'));
-        exit;
-    }
-    $fail = static function (string $code): void {
-        wp_safe_redirect(add_query_arg('error', $code, home_url('/register')));
-        exit;
-    };
-    if (!isset($_POST['kl_shell_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['kl_shell_nonce'])), 'kl_shell')) {
-        $fail('nonce');
-    }
-    if (!empty($_POST['company'])) {
-        $fail('1');
-    }
-    if (kl_shell_rate_blocked('register', 8)) {
-        $fail('rate');
-    }
-    kl_shell_rate_hit('register');
-    if (empty($_POST['kl_shell_pdn'])) {
-        $fail('consent');
-    }
-    $email = sanitize_email(wp_unslash((string) ($_POST['kl_email'] ?? '')));
-    $name = sanitize_text_field(wp_unslash((string) ($_POST['kl_name'] ?? '')));
-    $password = isset($_POST['kl_password']) ? (string) wp_unslash($_POST['kl_password']) : '';
-    if (!is_email($email)) {
-        $fail('email');
-    }
-    if (email_exists($email)) {
-        $fail('exists');
-    }
-    if (strlen($name) < 2 || strlen($name) > 80 || strlen($password) < 8 || strlen($password) > 200) {
-        $fail('fields');
-    }
-    $user_id = wp_insert_user([
-        'user_login' => $email,
-        'user_email' => $email,
-        'user_pass' => $password,
-        'display_name' => $name,
-        'first_name' => $name,
-        'role' => 'subscriber',
-    ]);
-    if ($user_id instanceof WP_Error || !$user_id) {
-        $fail('1');
-    }
-    $user_id = (int) $user_id;
-    update_user_meta($user_id, 'kl_email_verified', '0');
-    update_user_meta($user_id, 'kl_shell_registered', (string) time());
-    if (function_exists('kl_reg_issue_confirm_token') && function_exists('kl_reg_confirm_url')) {
-        $token = (string) kl_reg_issue_confirm_token($user_id);
-        if ($token !== '') {
-            $url = kl_reg_confirm_url($token);
-            wp_mail(
-                $email,
-                'Подтвердите почту — Кинолог LIFE',
-                "Здравствуйте!\n\nАккаунт создан. Подтвердите почту по ссылке (3 дня):\n{$url}\n\nПароль — тот, который вы задали при регистрации.\n"
-            );
-        }
-    }
-    wp_set_current_user($user_id);
-    wp_set_auth_cookie($user_id, true, is_ssl());
-    wp_safe_redirect(home_url('/account?welcome=1'));
+    // Новый ученик заводится только общей регистрацией CRM. Школа пользователя по почте не создаёт.
+    wp_safe_redirect(add_query_arg('error', 'crm', home_url('/register')));
     exit;
 }
 
@@ -243,7 +180,7 @@ function kl_shell_access_payload(int $uid): array
     } elseif ($verified === '0') {
         $email_verified = false;
     }
-    $sso = $has ? 'https://kinologlife.online/wp-admin/admin-post.php?action=kl_cabinet_go' : '';
+    $sso = '';
     $user = $uid > 0 ? get_userdata($uid) : null;
     return [
         'logged_in' => $uid > 0,
