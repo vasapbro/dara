@@ -307,4 +307,4 @@ Id роликов в `lessons.js` не менялись:
 
 Откат оболочки и кабинета описан в `/cursor/stores/self/docs/shell-status.md`.
 
-Код этого контракта — коммит ветки `cursor/online-school-shell-f1f6` сразу поверх `b07f58713f84824ec61354f47dfb86cdb117e2fa`.
+Код этого контракта: `245532c288c91c0bafd973b006391ddbc51dd63c` на ветке `cursor/online-school-shell-f1f6`, сразу поверх `b07f58713f84824ec61354f47dfb86cdb117e2fa`.
