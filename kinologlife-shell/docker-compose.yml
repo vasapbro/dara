@@ -1,0 +1,13 @@
+services:
+  web:
+    image: node:22-alpine
+    container_name: kinologlife_shell
+    network_mode: host
+    working_dir: /app
+    command: ["node", "server.js"]
+    volumes:
+      - /root/kinologlife_shell:/app:ro
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
