@@ -12,6 +12,7 @@ services:
       DATA_DIR: /data
       WP_HOST: "127.0.0.1"
       WP_PORT: "8088"
+      CRM_BASE_URL: "https://crm-paytest.kinologlife.online"
     volumes:
       - /root/kinologlife_cabinet/app:/app:ro
       - /root/kinologlife_cabinet/data:/data

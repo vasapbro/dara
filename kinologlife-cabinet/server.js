@@ -10,17 +10,38 @@ const HOST = "127.0.0.1";
 const ROOT = __dirname;
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
 const HMAC = process.env.CABINET_HMAC || "";
-const CRM_BASE = (process.env.CRM_BASE_URL || "").replace(/\/$/, "");
+const CRM_PAYTEST = "https://crm-paytest.kinologlife.online";
+const CRM_CONFIGURED = (process.env.CRM_BASE_URL || "").replace(/\/$/, "");
+const CRM_BASE = allowedCrm(CRM_CONFIGURED) ? CRM_CONFIGURED : "";
 const COOKIE = "kl_cab";
 const WEEK = 14 * 24 * 60 * 60 * 1000;
 const PLAYBACK_TTL = 300;
 const ID_OK = /^[A-Za-z0-9_-]{8,64}$/;
-const ACCESS_OK = new Set(["active", "gifted", "none", "expired"]);
-const WATCH = new Set(["active", "gifted"]);
+const SCHOOL_ID = /^[A-Za-z0-9_-]{1,80}$/;
+const BEARER_OK = /^[A-Za-z0-9\-._~+/=]{20,1800}$/;
+const ACCESS_OK = new Set(["none", "gifted", "paid"]);
+const WATCH = new Set(["gifted", "paid"]);
+
+function allowedCrm(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.username || url.password) return false;
+  if (url.pathname !== "/" && url.pathname !== "") return false;
+  if (url.protocol === "https:" && url.origin === CRM_PAYTEST) return true;
+  if (url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost")) return true;
+  return false;
+}
 
 if (HMAC.length < 32) {
   console.error("cabinet secrets missing");
   process.exit(1);
+}
+if (!CRM_BASE) {
+  console.error(CRM_CONFIGURED ? "cabinet crm origin refused" : "cabinet crm origin missing");
 }
 
 const sections = catalog.sections;
@@ -66,6 +87,8 @@ function readSession(req) {
     const data = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
     if (!data || typeof data.client_id !== "string" || data.exp < Date.now()) return null;
     if (typeof data.csrf !== "string" || typeof data.crm_session !== "string") return null;
+    if (typeof data.deal_id !== "string" || !SCHOOL_ID.test(data.deal_id)) return null;
+    if (!SCHOOL_ID.test(data.client_id) || !BEARER_OK.test(data.crm_session)) return null;
     return data;
   } catch {
     return null;
@@ -101,17 +124,18 @@ function verifyJwt(token) {
   }
 }
 
-function crmCall(method, pathname, body) {
-  if (!CRM_BASE) return Promise.resolve({ status: 0, json: null });
+function crmCall(method, pathname, { bearer } = {}) {
+  if (!CRM_BASE || !BEARER_OK.test(bearer || "")) return Promise.resolve({ status: 0, json: null });
   let url;
   try {
     url = new URL(pathname, `${CRM_BASE}/`);
   } catch {
     return Promise.resolve({ status: 0, json: null });
   }
-  if (url.username || url.password) return Promise.resolve({ status: 0, json: null });
+  if (url.username || url.password || url.origin !== new URL(CRM_BASE).origin) {
+    return Promise.resolve({ status: 0, json: null });
+  }
   const lib = url.protocol === "https:" ? https : http;
-  const payload = body ? JSON.stringify(body) : "";
   return new Promise((resolve, reject) => {
     const req = lib.request(
       {
@@ -122,8 +146,8 @@ function crmCall(method, pathname, body) {
         method,
         headers: {
           Accept: "application/json",
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(payload)
+          Authorization: `Bearer ${bearer}`,
+          "Content-Length": 0
         }
       },
       (res) => {
@@ -143,8 +167,21 @@ function crmCall(method, pathname, body) {
     );
     req.setTimeout(8000, () => req.destroy(new Error("crm timeout")));
     req.on("error", reject);
-    req.end(payload);
+    req.end();
   });
+}
+
+function schoolId(value) {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return String(value);
+  if (typeof value === "string" && SCHOOL_ID.test(value)) return value;
+  return "";
+}
+
+function bearerFrom(req, url) {
+  const header = String(req.headers.authorization || "");
+  const match = header.match(/^Bearer\s+(\S+)$/);
+  const token = (match && match[1]) || url.searchParams.get("t") || "";
+  return BEARER_OK.test(token) ? token : "";
 }
 
 function manualWpId(value) {
@@ -157,8 +194,17 @@ function manualWpId(value) {
 function parseAccessBody(json) {
   if (!json || typeof json !== "object") return null;
   const access = String(json.access || "");
-  if (!ACCESS_OK.has(access)) return null;
-  return { access, manual_wp_user_id: manualWpId(json.wp_user_id) };
+  const clientId = schoolId(json.client_id);
+  const dealId = schoolId(json.deal_id);
+  if (!ACCESS_OK.has(access) || !clientId || !dealId) return null;
+  const name = typeof json.name === "string" ? json.name.slice(0, 80) : "";
+  return {
+    client_id: clientId,
+    deal_id: dealId,
+    access,
+    name,
+    manual_wp_user_id: manualWpId(json.wp_user_id)
+  };
 }
 
 const accessCache = new Map();
@@ -166,15 +212,13 @@ const accessCache = new Map();
 async function accessFor(session) {
   const hit = accessCache.get(session.client_id);
   if (hit && Date.now() - hit.at < 45000) return hit.data;
-  const result = await crmCall("POST", "/api/v1/online-school/access", {
-    client_id: session.client_id,
-    session: session.crm_session
-  });
+  const result = await crmCall("GET", "/api/v1/me/online-school/access", { bearer: session.crm_session });
   const parsed = result.status === 200 ? parseAccessBody(result.json) : null;
-  if (!parsed) return null;
+  if (!parsed || parsed.client_id !== session.client_id) return null;
   const data = {
-    client_id: session.client_id,
-    name: session.name || "",
+    client_id: parsed.client_id,
+    deal_id: parsed.deal_id,
+    name: parsed.name || session.name || "",
     access: parsed.access,
     manual_wp_user_id: parsed.manual_wp_user_id,
     has_access: WATCH.has(parsed.access)
@@ -275,8 +319,8 @@ function mast(title, text) {
 }
 
 function closedCopy(access) {
-  if (access === "expired") return "Срок доступа закончился. Каталог откроется, когда общий аккаунт снова получит подписку или подарок.";
-  return "Подписка ещё не открыта. Регистрация сама уроки не включает. Собака для кабинета не нужна.";
+  if (access === "none") return "Подписка ещё не открыта. Регистрация сама уроки не включает. Собака для кабинета не нужна.";
+  return "Доступ к урокам закрыт. Оплаченная и подаренная подписка открывают один и тот же каталог.";
 }
 
 function pageSections(user, access) {
@@ -364,6 +408,7 @@ function pageLesson(user, access, section, lesson) {
 function sessionCookie(session) {
   const token = sign({
     client_id: session.client_id,
+    deal_id: session.deal_id,
     crm_session: session.crm_session,
     name: session.name || "",
     exp: Date.now() + WEEK,
@@ -553,32 +598,34 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/enter") {
-      const ticket = url.searchParams.get("t") || "";
-      const ticketOk = /^[A-Za-z0-9_-]{20,512}$/.test(ticket);
-      if (!ticketOk) {
+      const bearer = bearerFrom(req, url);
+      if (!bearer) {
         redirect(res, "/login?error=link");
         return;
       }
-      const result = await crmCall("POST", "/api/v1/online-school/session", { ticket });
+      const result = await crmCall("POST", "/api/v1/me/online-school/enter", { bearer });
       const parsed = result.status === 200 ? parseAccessBody(result.json) : null;
-      const clientId = result.json && typeof result.json.client_id === "string" ? result.json.client_id : "";
-      const crmSession = result.json && typeof result.json.session === "string" ? result.json.session : "";
-      const name = result.json && typeof result.json.name === "string" ? result.json.name.slice(0, 80) : "";
-      if (!parsed || !/^[A-Za-z0-9_-]{1,80}$/.test(clientId) || !/^[A-Za-z0-9_-]{8,200}$/.test(crmSession)) {
-        redirect(res, "/login?error=link");
+      if (!parsed) {
+        redirect(res, CRM_BASE ? "/login?error=link" : "/login?error=crm");
         return;
       }
-      accessCache.set(clientId, {
+      accessCache.set(parsed.client_id, {
         at: Date.now(),
         data: {
-          client_id: clientId,
-          name,
+          client_id: parsed.client_id,
+          deal_id: parsed.deal_id,
+          name: parsed.name,
           access: parsed.access,
           manual_wp_user_id: parsed.manual_wp_user_id,
           has_access: WATCH.has(parsed.access)
         }
       });
-      redirect(res, "/", sessionCookie({ client_id: clientId, crm_session: crmSession, name }));
+      redirect(res, "/", sessionCookie({
+        client_id: parsed.client_id,
+        deal_id: parsed.deal_id,
+        crm_session: bearer,
+        name: parsed.name
+      }));
       return;
     }
 
@@ -629,14 +676,19 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 403, { access: access.access, sections: [] });
         return;
       }
-      sendJson(res, 200, { access: access.access, manual_wp_user_id: access.manual_wp_user_id, ...catalogPayload(session.client_id) });
+      sendJson(res, 200, {
+        access: access.access,
+        deal_id: access.deal_id,
+        manual_wp_user_id: access.manual_wp_user_id,
+        ...catalogPayload(session.client_id)
+      });
       return;
     }
 
     if (req.method === "GET" && pathname === "/api/progress") {
       const all = readProgress();
       const row = all[session.client_id] && typeof all[session.client_id] === "object" ? all[session.client_id] : {};
-      sendJson(res, 200, { access: access.access, items: access.has_access ? row : {} });
+      sendJson(res, 200, { access: access.access, deal_id: access.deal_id, items: access.has_access ? row : {} });
       return;
     }
 
