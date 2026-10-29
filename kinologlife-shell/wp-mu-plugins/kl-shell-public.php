@@ -243,7 +243,7 @@ function kl_shell_access_payload(int $uid): array
     } elseif ($verified === '0') {
         $email_verified = false;
     }
-    $sso = $has ? 'https://baza.kinologlife.online/login' : '';
+    $sso = $has ? 'https://kinologlife.online/wp-admin/admin-post.php?action=kl_cabinet_go' : '';
     $user = $uid > 0 ? get_userdata($uid) : null;
     return [
         'logged_in' => $uid > 0,

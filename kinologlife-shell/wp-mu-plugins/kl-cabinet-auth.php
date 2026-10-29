@@ -132,7 +132,51 @@ function kl_cab_access(): void
     kl_cab_json($payload);
 }
 
+function kl_cab_go(): void
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        status_header(405);
+        exit;
+    }
+    nocache_headers();
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/login'));
+        exit;
+    }
+    $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+    set_transient('klgo_' . hash('sha256', $token), (int) get_current_user_id(), 90);
+    header('Referrer-Policy: no-referrer');
+    header('Location: https://baza.kinologlife.online/enter?t=' . rawurlencode($token), true, 302);
+    exit;
+}
+
+function kl_cab_redeem(): void
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !kl_cab_authorized()) {
+        kl_cab_json(['ok' => false], 404);
+    }
+    $token = isset($_POST['token']) ? (string) wp_unslash($_POST['token']) : '';
+    if (!preg_match('/^[A-Za-z0-9_-]{20,128}$/', $token)) {
+        kl_cab_json(['ok' => false], 401);
+    }
+    $key = 'klgo_' . hash('sha256', $token);
+    $uid = (int) get_transient($key);
+    delete_transient($key);
+    if ($uid <= 0) {
+        kl_cab_json(['ok' => false], 401);
+    }
+    $payload = kl_cab_access_for($uid);
+    if (empty($payload['ok'])) {
+        kl_cab_json(['ok' => false], 401);
+    }
+    kl_cab_json($payload);
+}
+
 add_action('admin_post_nopriv_kl_cabinet_login', 'kl_cab_login');
 add_action('admin_post_kl_cabinet_login', 'kl_cab_login');
 add_action('admin_post_nopriv_kl_cabinet_access', 'kl_cab_access');
 add_action('admin_post_kl_cabinet_access', 'kl_cab_access');
+add_action('admin_post_nopriv_kl_cabinet_go', 'kl_cab_go');
+add_action('admin_post_kl_cabinet_go', 'kl_cab_go');
+add_action('admin_post_nopriv_kl_cabinet_redeem', 'kl_cab_redeem');
+add_action('admin_post_kl_cabinet_redeem', 'kl_cab_redeem');

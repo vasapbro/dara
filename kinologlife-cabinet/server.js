@@ -283,12 +283,23 @@ function pageLesson(user, access, section, lesson) {
   return layout(lesson.title, body, { csrf: user.csrf, email: access.email });
 }
 
+function sessionCookie(uid) {
+  const token = sign({
+    uid,
+    exp: Date.now() + WEEK,
+    csrf: crypto.randomBytes(16).toString("hex")
+  });
+  return `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${14 * 24 * 60 * 60}`;
+}
+
 function pageLogin(error) {
   const message = error === "rate"
     ? "Слишком много попыток. Подождите немного."
-    : error
-      ? "Неверный адрес или пароль."
-      : "";
+    : error === "link"
+      ? "Ссылка на уроки устарела. Откройте их снова со страницы доступа."
+      : error
+        ? "Неверный адрес или пароль."
+        : "";
   const body = `${mast("Вход", "Тот же адрес и пароль, что на сайте школы.")}
     <article class="sheet login-sheet">
       <h1>Кабинет</h1>
@@ -298,7 +309,7 @@ function pageLogin(error) {
         <label>Пароль<input type="password" name="password" autocomplete="current-password" required></label>
         <button class="btn" type="submit">Войти</button>
       </form>
-      <p class="links"><a href="https://kinologlife.online/tarif">Оплатить доступ</a><a href="https://kinologlife.online/register">Регистрация</a></p>
+      <p class="links"><a href="https://kinologlife.online/wp-admin/admin-post.php?action=kl_cabinet_go">Войти с сайта</a><a href="https://kinologlife.online/tarif">Оплатить доступ</a></p>
     </article>`;
   return layout("Вход", body, null);
 }
@@ -413,13 +424,25 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       accessCache.set(result.json.uid, { at: Date.now(), data: result.json });
-      const token = sign({
-        uid: result.json.uid,
-        exp: Date.now() + WEEK,
-        csrf: crypto.randomBytes(16).toString("hex")
-      });
-      const cookie = `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${14 * 24 * 60 * 60}`;
-      redirect(res, "/", cookie);
+      redirect(res, "/", sessionCookie(result.json.uid));
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/enter") {
+      const ticket = url.searchParams.get("t") || "";
+      const existing = readSession(req);
+      const ticketOk = /^[A-Za-z0-9_-]{20,128}$/.test(ticket);
+      if (!ticketOk) {
+        redirect(res, existing ? "/" : "/login?error=link");
+        return;
+      }
+      const result = await wpPost("kl_cabinet_redeem", { token: ticket });
+      if (!result.json || !result.json.ok || typeof result.json.uid !== "number") {
+        redirect(res, existing ? "/" : "/login?error=link");
+        return;
+      }
+      accessCache.set(result.json.uid, { at: Date.now(), data: result.json });
+      redirect(res, "/", sessionCookie(result.json.uid));
       return;
     }
 
