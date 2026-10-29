@@ -305,4 +305,4 @@ Id роликов в `lessons.js` не менялись:
 
 Откат оболочки и кабинета описан в `/cursor/stores/self/docs/shell-status.md`.
 
-Код сессии CRM: `245532c288c91c0bafd973b006391ddbc51dd63c`. Сборка, которая ходит только на Paytest и читает `paid` / `gifted` / `none`, — следующий коммит той же ветки `cursor/online-school-shell-f1f6`. Она выложена в `kinologlife_cabinet` на порту `127.0.0.1:3021`. Проверка с сервера: `GET /health` → `{"ok":true}`, `POST /login` → `405 no_school_password`, вход с пустым Bearer → `303 /login?error=link`. Контейнер `kinolog_baza-frontend` в этот момент был Up 8 weeks.
+Код сессии CRM: `245532c288c91c0bafd973b006391ddbc51dd63c`. Сборка Paytest, которая читает `paid` / `gifted` / `none`, — `41b5774a9c1c5053833bdafe2507f5cb535a344f` на ветке `cursor/online-school-shell-f1f6`. Она выложена в `kinologlife_cabinet` на порту `127.0.0.1:3021`. Проверка с сервера: `GET /health` → `{"ok":true}`, `POST /login` → `405 no_school_password`, вход с пустым Bearer → `303 /login?error=link`. Контейнер `kinolog_baza-frontend` в этот момент был Up 8 weeks.
