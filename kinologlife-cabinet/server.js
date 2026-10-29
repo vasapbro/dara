@@ -191,9 +191,11 @@ function isDone(uid, key) {
 
 function layout(title, body, who) {
   const account = who
-    ? `<p class="who">${esc(who.email || who.name || "")}</p>
-       <form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(who.csrf)}"><button class="linkish" type="submit">Выйти</button></form>`
-    : "";
+    ? `<div class="account">
+         <p class="account__who"><strong>${esc(who.name || "Кабинет")}</strong><span>${esc(who.email || "")}</span></p>
+         <form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(who.csrf)}"><button class="account__out" type="submit">Выйти</button></form>
+       </div>`
+    : `<a class="account__out" href="https://kinologlife.online/">На сайт</a>`;
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -204,38 +206,48 @@ function layout(title, body, who) {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/cabinet.css?v=1">
+  <link rel="stylesheet" href="/assets/cabinet.css?v=3">
   <link rel="icon" href="/assets/logo.png" type="image/png">
 </head>
 <body>
 <a class="skip-link" href="#main">К содержанию</a>
-<header class="top">
-  <a class="logo" href="${who ? "/" : "https://kinologlife.online/"}" aria-label="Кинолог LIFE">
-    <img src="/assets/logo.png" alt="Кинолог LIFE">
-  </a>
-  <div class="top-actions">${account}</div>
+<header class="bar">
+  <div class="bar__inner">
+    <a class="logo" href="${who ? "/" : "https://kinologlife.online/"}" aria-label="Кинолог LIFE">
+      <img src="/assets/logo.png" alt="Кинолог LIFE">
+    </a>
+    ${account}
+  </div>
 </header>
-${body}
+<main id="main">${body}</main>
+<footer><p>Кинолог LIFE · уроки дома · <a href="https://kinologlife.online/">на сайт школы</a></p></footer>
 </body>
 </html>`;
 }
 
 function mast(title, text) {
-  return `<section class="mast">
-    <h1>${esc(title)}</h1>
-    ${text ? `<p>${esc(text)}</p>` : ""}
-    <div class="mast__wave" aria-hidden="true"></div>
+  return `<section class="hero">
+    <img class="dog dog-gold" src="/assets/dog-gold.webp?v=2" alt="" width="640" height="640">
+    <img class="dog dog-shiba" src="/assets/dog-shiba.webp?v=2" alt="" width="640" height="640">
+    <img class="butterfly" src="/assets/butterfly.webp?v=2" alt="" width="400" height="400">
+    <div class="hero__copy">
+      <p class="eyebrow">Кабинет</p>
+      <h1>${esc(title)}</h1>
+      ${text ? `<p>${esc(text)}</p>` : ""}
+    </div>
+    <div class="hero__wave" aria-hidden="true"></div>
   </section>`;
 }
 
 function pageSections(user, access) {
   if (!access.has_access) {
     const body = `${mast("Уроки", "Доступ откроется после оплаты на сайте школы.")}
-      <article class="sheet login-sheet">
-        <p>Сейчас уроки закрыты. Оплата остаётся на сайте школы, через Robokassa.</p>
+      <div class="sheet-wrap"><article class="sheet">
+        <h1>Доступ закрыт</h1>
+        <p class="fine">Оплата остаётся на сайте школы, через Robokassa.</p>
         <p><a class="btn" href="https://kinologlife.online/tarif">Открыть доступ</a></p>
-      </article>`;
-    return layout("Доступ", body, { ...user, csrf: user.csrf, email: access.email });
+      </article></div>`;
+    return layout("Доступ", body, { csrf: user.csrf, email: access.email, name: access.name });
   }
   const doneCount = (section) =>
     section.lessons.filter((lesson) => isDone(user.uid, `${section.id}/${lesson.slug}`)).length;
@@ -247,20 +259,28 @@ function pageSections(user, access) {
           return `<li><a class="card${done ? " is-done" : ""}" href="/lesson/${section.id}/${lesson.slug}">
             <b class="n">${String(index + 1).padStart(2, "0")}</b>
             <span class="copy"><strong>${esc(lesson.title)}</strong><span>${esc(lesson.note)}</span></span>
-            <em class="pill">${done ? "Пройден" : "Видео"}</em>
+            <em class="pill">${done ? "Пройден" : "Смотреть"}</em>
           </a></li>`;
         })
         .join("");
-      return `<section class="section" id="${esc(section.id)}">
-        <h2>${esc(section.title)}</h2>
-        <p class="lead">${esc(section.lead)} ${doneCount(section)} из ${section.lessons.length} отмечено.</p>
+      const eyebrow = section.id === "zapisi" ? "Около 40 минут" : "Короткие темы";
+      const done = doneCount(section);
+      return `<section class="panel" id="${esc(section.id)}">
+        <header class="panel__head">
+          <div>
+            <p class="eyebrow">${eyebrow}</p>
+            <h2>${esc(section.title)}</h2>
+            <p class="lead">${esc(section.lead)}</p>
+          </div>
+          <p class="count"><b>${done}</b><span>из ${section.lessons.length}</span></p>
+        </header>
         <ul class="cards">${cards}</ul>
       </section>`;
     })
     .join("");
-  const body = `${mast("Уроки", "Два раздела: короткие темы и полные записи занятий.")}
+  const body = `${mast("Уроки", "Короткие темы и полные записи занятий.")}
     <div class="board" id="sections">${blocks}</div>`;
-  return layout("Уроки", body, { csrf: user.csrf, email: access.email });
+  return layout("Уроки", body, { csrf: user.csrf, email: access.email, name: access.name });
 }
 
 function pageLesson(user, access, section, lesson) {
@@ -269,8 +289,8 @@ function pageLesson(user, access, section, lesson) {
   const player = lesson.kinescopeId && ID_OK.test(lesson.kinescopeId)
     ? `<div class="player"><iframe src="https://kinescope.io/embed/${encodeURIComponent(lesson.kinescopeId)}" title="${esc(lesson.title)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; gyroscope; accelerometer; clipboard-write; screen-wake-lock" allowfullscreen loading="lazy"></iframe></div>`
     : `<div class="player"><div class="player-empty">Видео на Kinescope появится в этом окне.</div></div>`;
-  const body = `${mast(section.title, "")}
-    <article class="sheet">
+  const body = `${mast(section.title, lesson.title)}
+    <div class="sheet-wrap"><article class="sheet">
       <a class="back" href="/#${esc(section.id)}">К списку</a>
       <h1>${esc(lesson.title)}</h1>
       ${player}
@@ -279,8 +299,8 @@ function pageLesson(user, access, section, lesson) {
         <input type="hidden" name="csrf" value="${esc(user.csrf)}">
         <button class="btn${done ? " done" : ""}" type="submit">${done ? "Пройден · снять отметку" : "Отметить пройденным"}</button>
       </form>
-    </article>`;
-  return layout(lesson.title, body, { csrf: user.csrf, email: access.email });
+    </article></div>`;
+  return layout(lesson.title, body, { csrf: user.csrf, email: access.email, name: access.name });
 }
 
 function sessionCookie(uid) {
@@ -301,16 +321,27 @@ function pageLogin(error) {
         ? "Неверный адрес или пароль."
         : "";
   const body = `${mast("Вход", "Тот же адрес и пароль, что на сайте школы.")}
-    <article class="sheet login-sheet">
-      <h1>Кабинет</h1>
-      ${message ? `<p class="warn">${esc(message)}</p>` : ""}
-      <form method="post" action="/login">
-        <label>Почта<input type="email" name="email" autocomplete="username" required></label>
-        <label>Пароль<input type="password" name="password" autocomplete="current-password" required></label>
-        <button class="btn" type="submit">Войти</button>
-      </form>
-      <p class="links"><a href="https://kinologlife.online/wp-admin/admin-post.php?action=kl_cabinet_go">Войти с сайта</a><a href="https://kinologlife.online/tarif">Оплатить доступ</a></p>
-    </article>`;
+    <div class="login-grid">
+      <article class="sheet">
+        <h1>Открыть уроки</h1>
+        <p class="fine">Почта и пароль те же, что при оплате на kinologlife.online.</p>
+        ${message ? `<p class="warn">${esc(message)}</p>` : ""}
+        <form method="post" action="/login">
+          <label>Почта<input type="email" name="email" autocomplete="username" required></label>
+          <label>Пароль<input type="password" name="password" autocomplete="current-password" required></label>
+          <button class="btn" type="submit">Войти</button>
+        </form>
+        <p class="links"><a href="https://kinologlife.online/wp-admin/admin-post.php?action=kl_cabinet_go">Войти с сайта</a><a href="https://kinologlife.online/tarif">Оплатить доступ</a></p>
+      </article>
+      <aside class="aside">
+        <p class="eyebrow">Два раздела</p>
+        <h2>Что внутри</h2>
+        <ul>
+          <li><strong>Обучение</strong><span>Короткие темы: маркер, выдержка и то, что добавим дальше.</span></li>
+          <li><strong>Записи занятий</strong><span>Полные коррекции с занятий, около 40 минут. Ролики на Kinescope.</span></li>
+        </ul>
+      </aside>
+    </div>`;
   return layout("Вход", body, null);
 }
 
@@ -481,7 +512,7 @@ const server = http.createServer(async (req, res) => {
 
     const access = await accessFor(session.uid);
     if (!access) {
-      send(res, 503, layout("Доступ", `${mast("Уроки", "")}<article class="sheet login-sheet"><p class="warn">Не удалось проверить доступ. Обновите страницу.</p></article>`, null));
+      send(res, 503, layout("Доступ", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p class="warn">Не удалось проверить доступ. Обновите страницу.</p></article></div>`, null));
       return;
     }
     const viewer = { uid: session.uid, csrf: session.csrf };
@@ -499,7 +530,7 @@ const server = http.createServer(async (req, res) => {
       }
       const found = findLesson(lessonMatch[1], lessonMatch[2]);
       if (!found) {
-        send(res, 404, layout("Урок", `${mast("Уроки", "")}<article class="sheet"><p>Такого урока нет.</p></article>`, { csrf: session.csrf, email: access.email }));
+        send(res, 404, layout("Урок", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p>Такого урока нет.</p></article></div>`, { csrf: session.csrf, email: access.email, name: access.name }));
         return;
       }
       send(res, 200, pageLesson(viewer, access, found.section, found.lesson));
@@ -533,10 +564,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    send(res, 404, layout("Кабинет", `${mast("Уроки", "")}<article class="sheet"><p>Страница не найдена.</p></article>`, { csrf: session.csrf, email: access.email }));
+    send(res, 404, layout("Кабинет", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p>Страница не найдена.</p></article></div>`, { csrf: session.csrf, email: access.email, name: access.name }));
   } catch (error) {
     console.error("cabinet", error && error.message ? error.message : "error");
-    send(res, 500, layout("Кабинет", `${mast("Уроки", "")}<article class="sheet"><p class="warn">Не получилось открыть страницу. Обновите её.</p></article>`, null));
+    send(res, 500, layout("Кабинет", `${mast("Уроки", "")}<div class="sheet-wrap"><article class="sheet"><p class="warn">Не получилось открыть страницу. Обновите её.</p></article></div>`, null));
   }
 });
 
