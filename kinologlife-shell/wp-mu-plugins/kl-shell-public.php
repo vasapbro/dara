@@ -243,12 +243,7 @@ function kl_shell_access_payload(int $uid): array
     } elseif ($verified === '0') {
         $email_verified = false;
     }
-    $sso = '';
-    if ($has && function_exists('kl_baza_public_sso_start_url')) {
-        $sso = (string) kl_baza_public_sso_start_url('/lk');
-    } elseif ($has) {
-        $sso = 'https://baza.kinologlife.online/lk';
-    }
+    $sso = $has ? 'https://baza.kinologlife.online/login' : '';
     $user = $uid > 0 ? get_userdata($uid) : null;
     return [
         'logged_in' => $uid > 0,

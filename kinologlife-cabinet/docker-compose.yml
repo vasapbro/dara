@@ -1,0 +1,21 @@
+services:
+  web:
+    image: node:22-alpine
+    container_name: kinologlife_cabinet
+    network_mode: host
+    working_dir: /app
+    command: ["node", "server.js"]
+    env_file:
+      - /root/kinologlife_cabinet/secrets.env
+    environment:
+      PORT: "3021"
+      DATA_DIR: /data
+      WP_HOST: "127.0.0.1"
+      WP_PORT: "8088"
+    volumes:
+      - /root/kinologlife_cabinet/app:/app:ro
+      - /root/kinologlife_cabinet/data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
