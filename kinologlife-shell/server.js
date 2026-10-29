@@ -30,7 +30,7 @@ function layout(page, body) {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/shell-assets/site.css?v=6">
+  <link rel="stylesheet" href="/shell-assets/site.css?v=7">
   <link rel="icon" href="/shell-assets/logo.png" type="image/png">
 </head>
 <body class="${home ? "is-home" : "is-inner"}">
@@ -73,7 +73,7 @@ function layout(page, body) {
   <p>Пользуясь сайтом, вы соглашаетесь с <a href="/cookies-policy/">политикой cookie</a>.</p>
   <button class="btn" type="button" id="cookie-ok">Хорошо</button>
 </div>
-<script src="/shell-assets/site.js?v=6" defer></script>
+<script src="/shell-assets/site.js?v=7" defer></script>
 </body>
 </html>`;
 }
@@ -95,18 +95,21 @@ const BODIES = {
     <img class="dog dog-shiba" src="/shell-assets/dog-shiba.webp?v=4" alt="" width="560" height="553">
     <div class="hero__wave" aria-hidden="true"></div>
   </section>
-  <section class="band" id="komu">
+  <section class="band reasons-band" id="komu">
     <div class="band__inner">
-      <h2>Когда занятия дома уже нужны</h2>
-      <div class="cards">
-        <article class="card"><span class="mark" aria-hidden="true">×</span><p>Лает дома и не может остаться одна.</p></article>
-        <article class="card"><span class="mark" aria-hidden="true">×</span><p>Не слышит «ко мне» на прогулке.</p></article>
-        <article class="card"><span class="mark" aria-hidden="true">×</span><p>Прыгает на гостей и не встречает людей спокойно.</p></article>
-        <article class="card"><span class="mark" aria-hidden="true">×</span><p>Тянет поводок, и гулять тяжело.</p></article>
-        <article class="card"><span class="mark" aria-hidden="true">×</span><p>Грызёт вещи, пока вас нет рядом.</p></article>
-        <article class="card"><span class="mark" aria-hidden="true">×</span><p>Боится людей и других собак.</p></article>
+      <div class="reasons-head">
+        <p class="eyebrow">Дома</p>
+        <h2>Когда занятия дома уже нужны</h2>
+        <p>Если прогулка и квартира уже не складываются, уроки можно смотреть и повторять у себя.</p>
       </div>
-      <p class="band__note">Короткие уроки открываются после оплаты. Смотрите и повторяете дома, в своём темпе.</p>
+      <ol class="reasons">
+        <li class="reason"><span class="reason__n">01</span><div><h3>Лает дома</h3><p>Не может остаться одна и успокоиться в квартире.</p></div></li>
+        <li class="reason"><span class="reason__n">02</span><div><h3>Не слышит «ко мне»</h3><p>На прогулке зов теряется, и собака уходит дальше.</p></div></li>
+        <li class="reason"><span class="reason__n">03</span><div><h3>Прыгает на гостей</h3><p>Встреча людей превращается в скачок, а не в спокойный контакт.</p></div></li>
+        <li class="reason"><span class="reason__n">04</span><div><h3>Тянет поводок</h3><p>Прогулка идёт за поводком, а не рядом с вами.</p></div></li>
+        <li class="reason"><span class="reason__n">05</span><div><h3>Грызёт вещи</h3><p>Пока вас нет, квартира становится добычей.</p></div></li>
+        <li class="reason"><span class="reason__n">06</span><div><h3>Боится на улице</h3><p>Люди и другие собаки делают выход из дома тяжёлым.</p></div></li>
+      </ol>
     </div>
   </section>
   <section class="band band--plain">
